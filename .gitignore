@@ -1,0 +1,12 @@
+__pycache__/
+.pytest_cache/
+.DS_Store
+
+*.csv
+*.CSV
+*.xls
+*.XLS
+*.xlsx
+*.XLSX
+
+!.streamlit/
