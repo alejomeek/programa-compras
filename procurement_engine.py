@@ -57,6 +57,8 @@ class AnalysisResult:
     inventory_objective: pd.DataFrame
     purchase: pd.DataFrame
     purchase_summary: pd.DataFrame
+    purchase_orders: pd.DataFrame
+    purchase_order_costs: pd.DataFrame
     transfers: pd.DataFrame
     manual_review: pd.DataFrame
     cost_changes: pd.DataFrame
@@ -156,6 +158,7 @@ def analyze(
     sales_by_ean = sales_prepared.set_index("ean") if not sales_prepared.empty else pd.DataFrame()
     purchase_rows: list[dict] = []
     purchase_summary_rows: list[dict] = []
+    purchase_order_rows: list[dict] = []
     inventory_objective_rows: list[dict] = []
     transfer_rows: list[dict] = []
     review_rows: list[dict] = []
@@ -181,6 +184,9 @@ def analyze(
         inventory_objective_rows.append(_as_inventory_objective(result["purchase"], "Comprable"))
         purchase_rows.append(result["purchase"])
         purchase_summary_rows.append(result["purchase_summary"])
+        purchase_order_rows.append(
+            _as_purchase_order_row(result["purchase"], provider_row["costo_proveedor"])
+        )
         transfer_rows.extend(result["transfers"])
         review_rows.extend(result["manual_review"])
 
@@ -215,6 +221,8 @@ def analyze(
     no_tbc_cost = _build_no_tbc_cost(supplier_products, provider_valid, sales_prepared)
     cost_changes = _build_cost_changes(supplier_products, provider_valid, sales_prepared)
     new_products = _build_new_products(provider_not_in_sdos)
+    purchase_order_rows.extend(_new_product_purchase_order_rows(new_products))
+    purchase_orders, purchase_order_costs = _build_purchase_order_sheets(purchase_order_rows)
     discontinued = _build_discontinued(supplier_not_in_provider)
     data_issues = pd.DataFrame(issues)
     summary = _build_summary(
@@ -239,6 +247,8 @@ def analyze(
         inventory_objective=_order_inventory_objective_columns(_clean_df(inventory_objective)),
         purchase=_order_purchase_columns(_clean_df(purchase)),
         purchase_summary=_order_purchase_summary_columns(_clean_df(purchase_summary)),
+        purchase_orders=_order_purchase_order_columns(_clean_df(purchase_orders)),
+        purchase_order_costs=_clean_df(purchase_order_costs),
         transfers=_clean_df(transfers),
         manual_review=_order_manual_review_columns(_clean_df(manual_review)),
         cost_changes=_clean_df(cost_changes),
@@ -256,13 +266,14 @@ def analyze(
 def result_to_excel(result: AnalysisResult) -> bytes:
     output = BytesIO()
     sheets = {
+        "Cambios de costo": result.cost_changes,
+        "Compra sugerida resumida": result.purchase_summary,
+        "Ordenes de Compra": result.purchase_orders,
         "Resumen": result.summary,
         "Inventario objetivo": result.inventory_objective,
         "Compra sugerida": result.purchase,
-        "Compra sugerida resumida": result.purchase_summary,
         "Redistribucion sugerida": result.transfers,
         "Revision manual": result.manual_review,
-        "Cambios de costo": result.cost_changes,
         "Productos nuevos": result.new_products,
         "Descontinuados no encontrados": result.discontinued,
         "Sin costo TBC": result.no_tbc_cost,
@@ -301,24 +312,81 @@ def result_to_excel(result: AnalysisResult) -> bytes:
                 width = _excel_autofit_width(df, col)
                 header_format = default_header
                 body_format = None
-                if sheet_name == "Compra sugerida resumida":
+                if sheet_name in {"Compra sugerida resumida", "Ordenes de Compra"}:
                     if idx <= 2:
                         body_format = frozen_body
                         header_format = frozen_header
                     else:
-                        location = next((loc for loc in OPERATIVE_LOCATIONS if str(col).startswith(f"{loc} |")), None)
+                        location = next(
+                            (loc for loc in OPERATIVE_LOCATIONS if str(col) == loc or str(col).startswith(f"{loc} |")),
+                            None,
+                        )
                         if location:
                             body_format = location_formats[location]
                             header_format = location_header_formats[location]
                 worksheet.set_column(idx, idx, width)
                 worksheet.write(0, idx, col, header_format)
-                if sheet_name == "Compra sugerida resumida" and body_format is not None:
+                if sheet_name in {"Compra sugerida resumida", "Ordenes de Compra"} and body_format is not None:
                     for row_idx, value in enumerate(df[col].tolist(), start=1):
                         if pd.isna(value):
                             worksheet.write_blank(row_idx, idx, None, body_format)
                         else:
                             worksheet.write(row_idx, idx, value, body_format)
+        metadata = result.purchase_order_costs
+        metadata.to_excel(writer, sheet_name="_Datos OC", index=False)
+        writer.sheets["_Datos OC"].hide()
     return output.getvalue()
+
+
+def read_purchase_orders(source: str | Path | BinaryIO) -> pd.DataFrame:
+    """Read final quantities from the editable workbook and recover hidden unit costs."""
+    try:
+        orders = pd.read_excel(source, sheet_name="Ordenes de Compra", dtype=str).fillna("")
+        if hasattr(source, "seek"):
+            source.seek(0)
+        costs = pd.read_excel(source, sheet_name="_Datos OC", dtype=str).fillna("")
+    except ValueError as exc:
+        raise ValueError("El archivo debe incluir las hojas 'Ordenes de Compra' y '_Datos OC' generadas por esta app.") from exc
+
+    required = ["SKU", "EAN", "Producto", *OPERATIVE_LOCATIONS]
+    _require_columns(orders, required, "Ordenes de Compra")
+    _require_columns(costs, ["EAN", "Costo unitario"], "_Datos OC")
+
+    normalized_costs = costs.copy()
+    normalized_costs["EAN"] = normalized_costs["EAN"].astype(str)
+    normalized_costs["Costo unitario"] = normalized_costs["Costo unitario"].apply(_to_number)
+    cost_by_ean = normalized_costs.drop_duplicates("EAN").set_index("EAN")["Costo unitario"].to_dict()
+
+    rows: list[dict] = []
+    for _, row in orders.iterrows():
+        ean = str(row["EAN"]).strip()
+        if not ean:
+            continue
+        cost = cost_by_ean.get(ean)
+        if cost is None or pd.isna(cost):
+            raise ValueError(f"No se encontró un costo unitario válido para el EAN {ean}.")
+        for location in OPERATIVE_LOCATIONS:
+            raw_quantity = str(row.get(location, "")).strip()
+            if raw_quantity == "" or raw_quantity.upper() == "NUEVO":
+                continue
+            numeric_quantity = _to_number(raw_quantity)
+            if numeric_quantity is None or numeric_quantity < 0 or not float(numeric_quantity).is_integer():
+                raise ValueError(
+                    f"La cantidad para el EAN {ean} en {location} debe ser un número entero mayor o igual a 0."
+                )
+            quantity = int(numeric_quantity)
+            if quantity > 0:
+                rows.append(
+                    {
+                        "Punto": location,
+                        "SKU": str(row.get("SKU", "")).strip(),
+                        "EAN": ean,
+                        "Producto": str(row.get("Producto", "")).strip(),
+                        "Cantidad": quantity,
+                        "Costo unitario": float(cost),
+                    }
+                )
+    return pd.DataFrame(rows)
 
 
 def _excel_autofit_width(df: pd.DataFrame, column: str) -> int:
@@ -852,6 +920,52 @@ def _order_purchase_summary_columns(df: pd.DataFrame) -> pd.DataFrame:
                 f"{loc} | Compra sugerida",
             ]
         )
+    existing = [col for col in ordered if col in df.columns]
+    rest = [col for col in df.columns if col not in existing]
+    return df[existing + rest]
+
+
+def _as_purchase_order_row(purchase_row: dict, unit_cost) -> dict:
+    row = {
+        "SKU": purchase_row.get("SKU", ""),
+        "EAN": purchase_row.get("EAN", ""),
+        "Producto": purchase_row.get("Producto", ""),
+        "Costo unitario": unit_cost,
+    }
+    for loc in OPERATIVE_LOCATIONS:
+        row[loc] = int(purchase_row.get(f"{loc} | Compra sugerida", 0) or 0)
+    return row
+
+
+def _new_product_purchase_order_rows(new_products: pd.DataFrame) -> list[dict]:
+    rows: list[dict] = []
+    for _, product in new_products.iterrows():
+        row = {
+            "SKU": "",
+            "EAN": product.get("EAN", ""),
+            "Producto": product.get("Nombre", ""),
+            "Costo unitario": product.get("Costo proveedor", 0),
+        }
+        for loc in OPERATIVE_LOCATIONS:
+            row[loc] = "NUEVO"
+        rows.append(row)
+    return rows
+
+
+def _build_purchase_order_sheets(rows: list[dict]) -> tuple[pd.DataFrame, pd.DataFrame]:
+    columns = ["SKU", "EAN", "Producto", *OPERATIVE_LOCATIONS]
+    if not rows:
+        return pd.DataFrame(columns=columns), pd.DataFrame(columns=["EAN", "Costo unitario"])
+    full = pd.DataFrame(rows)
+    visible = full[columns].copy()
+    costs = full[["EAN", "Costo unitario"]].drop_duplicates("EAN").copy()
+    return visible, costs
+
+
+def _order_purchase_order_columns(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return df
+    ordered = ["SKU", "EAN", "Producto", *OPERATIVE_LOCATIONS]
     existing = [col for col in ordered if col in df.columns]
     rest = [col for col in df.columns if col not in existing]
     return df[existing + rest]

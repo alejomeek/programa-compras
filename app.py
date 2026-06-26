@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 
 import pandas as pd
@@ -11,10 +12,12 @@ from procurement_engine import (
     analyze,
     make_provider_template,
     read_inveptos,
+    read_purchase_orders,
     read_provider,
     read_sdos,
     result_to_excel,
 )
+from purchase_order_pdf import build_purchase_order_zip
 
 
 st.set_page_config(page_title="Compras Jugando y Educando", layout="wide")
@@ -53,9 +56,18 @@ def main() -> None:
         supplier_name = st.text_input("Nombre proveedor", value="SPEKTRA")
         fair_mode = st.toggle("Modo Feria", value=False)
 
+        st.header("Órdenes de compra")
+        purchase_order_file = st.file_uploader(
+            "Excel con Órdenes de Compra",
+            type=["xlsx"],
+            help="Carga el Excel descargado de esta app después de definir las cantidades finales.",
+        )
+
         st.header("Reposición")
         global_days = st.number_input("Días objetivo global", min_value=1, max_value=365, value=45, step=1)
         global_minimum = st.number_input("Mínimo quiebre global", min_value=0, max_value=999, value=1, step=1)
+
+    render_purchase_order_generator(purchase_order_file, supplier_name)
 
     if not _inputs_ready(use_local, sdos_file, inveptos_file, provider_file):
         st.info("Carga los archivos o activa los archivos locales de ejemplo para iniciar el análisis.")
@@ -132,6 +144,7 @@ def render_tabs(result) -> None:
             "Inventario objetivo",
             "Compra sugerida",
             "Compra sugerida resumida",
+            "Órdenes de compra",
             "Redistribución sugerida",
             "Revisión manual",
             "Cambios de costo",
@@ -156,25 +169,71 @@ def render_tabs(result) -> None:
         st.dataframe(general_search(result.purchase_summary, "compra sugerida resumida"), use_container_width=True, hide_index=True)
 
     with tabs[4]:
-        st.dataframe(general_search(result.transfers, "redistribución"), use_container_width=True, hide_index=True)
+        st.dataframe(general_search(result.purchase_orders, "ordenes de compra"), use_container_width=True, hide_index=True)
 
     with tabs[5]:
-        st.dataframe(general_search(result.manual_review, "revisión manual"), use_container_width=True, hide_index=True)
+        st.dataframe(general_search(result.transfers, "redistribución"), use_container_width=True, hide_index=True)
 
     with tabs[6]:
-        st.dataframe(general_search(result.cost_changes, "cambios de costo"), use_container_width=True, hide_index=True)
+        st.dataframe(general_search(result.manual_review, "revisión manual"), use_container_width=True, hide_index=True)
 
     with tabs[7]:
-        st.dataframe(general_search(result.new_products, "productos nuevos"), use_container_width=True, hide_index=True)
+        st.dataframe(general_search(result.cost_changes, "cambios de costo"), use_container_width=True, hide_index=True)
 
     with tabs[8]:
-        st.dataframe(general_search(result.discontinued, "descontinuados"), use_container_width=True, hide_index=True)
+        st.dataframe(general_search(result.new_products, "productos nuevos"), use_container_width=True, hide_index=True)
 
     with tabs[9]:
-        st.dataframe(general_search(result.no_tbc_cost, "sin costo TBC"), use_container_width=True, hide_index=True)
+        st.dataframe(general_search(result.discontinued, "descontinuados"), use_container_width=True, hide_index=True)
 
     with tabs[10]:
+        st.dataframe(general_search(result.no_tbc_cost, "sin costo TBC"), use_container_width=True, hide_index=True)
+
+    with tabs[11]:
         st.dataframe(general_search(result.data_issues, "problemas de datos"), use_container_width=True, hide_index=True)
+
+
+def render_purchase_order_generator(order_file, supplier_name: str) -> None:
+    if order_file is None:
+        return
+
+    st.subheader("Generar órdenes de compra")
+    try:
+        order_items = read_purchase_orders(order_file)
+    except Exception as exc:
+        st.error(str(exc))
+        return
+
+    if order_items.empty:
+        st.warning("No hay cantidades mayores a 0 en la hoja 'Ordenes de Compra'.")
+        return
+
+    base_number, issue_date = st.columns(2)
+    order_number = base_number.text_input("Número base OC", value="OC-001")
+    emission_date = issue_date.date_input("Fecha de emisión", value=date.today())
+    summary = (
+        order_items.assign(**{"Total": order_items["Cantidad"] * order_items["Costo unitario"]})
+        .groupby("Punto", as_index=False)
+        .agg(Líneas=("EAN", "count"), Unidades=("Cantidad", "sum"), Total=("Total", "sum"))
+    )
+    st.dataframe(summary, use_container_width=True, hide_index=True)
+    try:
+        pdf_zip = build_purchase_order_zip(
+            order_items=order_items,
+            base_number=order_number.strip() or "OC",
+            supplier_name=supplier_name.strip() or "Proveedor",
+            issue_date=emission_date,
+        )
+    except ValueError as exc:
+        st.error(str(exc))
+        return
+    st.download_button(
+        "Descargar órdenes de compra (PDF)",
+        data=pdf_zip,
+        file_name=f"{order_number.strip() or 'ordenes_compra'}.zip",
+        mime="application/zip",
+        use_container_width=True,
+    )
 
 
 def purchase_filters(df: pd.DataFrame) -> pd.DataFrame:
