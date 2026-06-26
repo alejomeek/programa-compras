@@ -1,6 +1,7 @@
 __pycache__/
 .pytest_cache/
 .DS_Store
+tmp/
 
 *.csv
 *.CSV
@@ -8,5 +9,7 @@ __pycache__/
 *.XLS
 *.xlsx
 *.XLSX
+*.pdf
+*.PDF
 
 !.streamlit/

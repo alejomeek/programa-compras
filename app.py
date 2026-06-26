@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 
 import pandas as pd
@@ -15,6 +16,7 @@ from procurement_engine import (
     read_sdos,
     result_to_excel,
 )
+from purchase_order_pdf import build_purchase_order_zip
 
 
 st.set_page_config(page_title="Compras Jugando y Educando", layout="wide")
@@ -122,16 +124,17 @@ def main() -> None:
         use_container_width=True,
     )
 
-    render_tabs(result)
+    render_tabs(result, supplier_name=supplier_name)
 
 
-def render_tabs(result) -> None:
+def render_tabs(result, supplier_name: str) -> None:
     tabs = st.tabs(
         [
             "Resumen",
             "Inventario objetivo",
             "Compra sugerida",
             "Compra sugerida resumida",
+            "Órdenes de compra",
             "Redistribución sugerida",
             "Revisión manual",
             "Cambios de costo",
@@ -156,25 +159,95 @@ def render_tabs(result) -> None:
         st.dataframe(general_search(result.purchase_summary, "compra sugerida resumida"), use_container_width=True, hide_index=True)
 
     with tabs[4]:
-        st.dataframe(general_search(result.transfers, "redistribución"), use_container_width=True, hide_index=True)
+        render_purchase_orders(result, supplier_name)
 
     with tabs[5]:
-        st.dataframe(general_search(result.manual_review, "revisión manual"), use_container_width=True, hide_index=True)
+        st.dataframe(general_search(result.transfers, "redistribución"), use_container_width=True, hide_index=True)
 
     with tabs[6]:
-        st.dataframe(general_search(result.cost_changes, "cambios de costo"), use_container_width=True, hide_index=True)
+        st.dataframe(general_search(result.manual_review, "revisión manual"), use_container_width=True, hide_index=True)
 
     with tabs[7]:
-        st.dataframe(general_search(result.new_products, "productos nuevos"), use_container_width=True, hide_index=True)
+        st.dataframe(general_search(result.cost_changes, "cambios de costo"), use_container_width=True, hide_index=True)
 
     with tabs[8]:
-        st.dataframe(general_search(result.discontinued, "descontinuados"), use_container_width=True, hide_index=True)
+        st.dataframe(general_search(result.new_products, "productos nuevos"), use_container_width=True, hide_index=True)
 
     with tabs[9]:
-        st.dataframe(general_search(result.no_tbc_cost, "sin costo TBC"), use_container_width=True, hide_index=True)
+        st.dataframe(general_search(result.discontinued, "descontinuados"), use_container_width=True, hide_index=True)
 
     with tabs[10]:
+        st.dataframe(general_search(result.no_tbc_cost, "sin costo TBC"), use_container_width=True, hide_index=True)
+
+    with tabs[11]:
         st.dataframe(general_search(result.data_issues, "problemas de datos"), use_container_width=True, hide_index=True)
+
+
+def render_purchase_orders(result, supplier_name: str) -> None:
+    if result.purchase_order_items.empty:
+        st.info("No hay productos disponibles para preparar órdenes de compra.")
+        return
+
+    st.subheader("Preparar órdenes de compra")
+    c1, c2, c3 = st.columns([1.2, 1.2, 2])
+    base_number = c1.text_input("Número base OC", value=f"OC-{supplier_name or 'PROVEEDOR'}-001")
+    issue_date = c2.date_input("Fecha emisión", value=date.today())
+    notes = c3.text_input("Notas", value="")
+
+    f1, f2, f3 = st.columns([1, 2, 1])
+    point_filter = f1.selectbox("Punto", ["Todos"] + OPERATIVE_LOCATIONS)
+    search = f2.text_input("Buscar SKU, EAN o producto", key="purchase_order_search")
+    show_only_positive = f3.checkbox("Solo compra final > 0", value=False)
+
+    editable = result.purchase_order_items.copy()
+    if point_filter != "Todos":
+        editable = editable[editable["Punto"] == point_filter]
+    editable = _filter_query(editable, search)
+
+    edited = st.data_editor(
+        editable,
+        hide_index=True,
+        use_container_width=True,
+        key="purchase_order_editor",
+        disabled=["Estado producto", "Punto", "SKU", "EAN", "Producto", "Compra sugerida", "Costo unitario", "Total línea"],
+        column_config={
+            "Compra final": st.column_config.NumberColumn(min_value=0, step=1, format="%d"),
+            "Costo unitario": st.column_config.NumberColumn(format="$ %d"),
+            "Total línea": st.column_config.NumberColumn(format="$ %d"),
+        },
+    )
+    edited = edited.copy()
+    edited["Compra final"] = pd.to_numeric(edited["Compra final"], errors="coerce").fillna(0).clip(lower=0).round().astype(int)
+    edited["Costo unitario"] = pd.to_numeric(edited["Costo unitario"], errors="coerce").fillna(0)
+    edited["Total línea"] = edited["Compra final"] * edited["Costo unitario"]
+    if show_only_positive:
+        edited = edited[edited["Compra final"] > 0]
+
+    summary = (
+        edited[edited["Compra final"] > 0]
+        .groupby("Punto", as_index=False)
+        .agg(Líneas=("EAN", "count"), Unidades=("Compra final", "sum"), Total=("Total línea", "sum"))
+    )
+    st.markdown("**Resumen por punto**")
+    st.dataframe(summary, use_container_width=True, hide_index=True)
+
+    try:
+        zip_bytes = build_purchase_order_zip(
+            order_items=edited,
+            base_number=base_number.strip(),
+            supplier_name=supplier_name or "Proveedor",
+            issue_date=issue_date,
+            notes=notes,
+        )
+        st.download_button(
+            "Descargar ZIP de órdenes de compra",
+            data=zip_bytes,
+            file_name=f"{base_number.strip() or 'ordenes_compra'}.zip",
+            mime="application/zip",
+            use_container_width=True,
+        )
+    except ValueError as exc:
+        st.info(str(exc))
 
 
 def purchase_filters(df: pd.DataFrame) -> pd.DataFrame:
