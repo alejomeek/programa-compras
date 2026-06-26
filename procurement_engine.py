@@ -84,14 +84,17 @@ def read_provider(source: str | Path | BinaryIO) -> pd.DataFrame:
     cost_col = _find_provider_cost_column(data.columns)
     if cost_col is None:
         raise ValueError("La plantilla proveedor debe tener la columna 'Costo proveedor'.")
-    provider = data[["EAN-13", cost_col]].copy()
-    provider = provider.rename(columns={cost_col: "Costo proveedor"})
+    name_col = _find_provider_name_column(data.columns)
+    if name_col is None:
+        raise ValueError("La plantilla proveedor debe tener la columna 'Nombre'.")
+    provider = data[["EAN-13", name_col, cost_col]].copy()
+    provider = provider.rename(columns={name_col: "Nombre", cost_col: "Costo proveedor"})
     return provider.fillna("")
 
 
 def make_provider_template() -> bytes:
     output = BytesIO()
-    pd.DataFrame(columns=["EAN-13", "Costo proveedor"]).to_excel(output, index=False, engine="openpyxl")
+    pd.DataFrame(columns=["EAN-13", "Nombre", "Costo proveedor"]).to_excel(output, index=False, engine="openpyxl")
     return output.getvalue()
 
 
@@ -104,7 +107,7 @@ def analyze(
     warnings: list[str] = []
     issues: list[dict] = []
     _require_columns(sdos_df, ["Codpro", "Nompro", "Valuni", "Codean", "Codea2"], "SDOSXSUC")
-    _require_columns(provider_df, ["EAN-13", "Costo proveedor"], "Proveedor")
+    _require_columns(provider_df, ["EAN-13", "Nombre", "Costo proveedor"], "Proveedor")
 
     supplier_code = str(config.supplier_code).strip()
     if not re.fullmatch(r"\d{3}", supplier_code):
@@ -355,6 +358,17 @@ def _find_provider_cost_column(columns) -> str | None:
     return None
 
 
+def _find_provider_name_column(columns) -> str | None:
+    stripped = [str(c).strip() for c in columns]
+    if "Nombre" in stripped:
+        return "Nombre"
+    for col in stripped:
+        upper = col.upper()
+        if "DESCRIPCION" in upper and "ARTICULO" in upper:
+            return col
+    return None
+
+
 def _require_columns(df: pd.DataFrame, columns: list[str], source: str) -> None:
     missing = [c for c in columns if c not in df.columns]
     if missing:
@@ -382,9 +396,11 @@ def _prepare_provider(df: pd.DataFrame, issues: list[dict]) -> pd.DataFrame:
     provider = df.copy().fillna("")
     provider = provider[
         provider["EAN-13"].astype(str).str.strip().ne("")
+        | provider["Nombre"].astype(str).str.strip().ne("")
         | provider["Costo proveedor"].astype(str).str.strip().ne("")
     ].copy()
     provider["ean"] = provider["EAN-13"].astype(str)
+    provider["nombre_proveedor"] = provider["Nombre"].astype(str).str.strip()
     provider["ean_valido"] = provider["ean"].apply(_is_valid_ean)
     provider["costo_proveedor"] = provider["Costo proveedor"].apply(_to_number)
     provider["costo_valido"] = provider["costo_proveedor"].notna()
@@ -651,7 +667,9 @@ def _build_no_tbc_cost(supplier_products, provider_valid, sales_prepared) -> pd.
 def _build_new_products(provider_not_in_sdos) -> pd.DataFrame:
     if provider_not_in_sdos.empty:
         return pd.DataFrame()
-    return provider_not_in_sdos[["ean", "costo_proveedor"]].rename(columns={"ean": "EAN", "costo_proveedor": "Costo proveedor"})
+    return provider_not_in_sdos[["ean", "nombre_proveedor", "costo_proveedor"]].rename(
+        columns={"ean": "EAN", "nombre_proveedor": "Nombre", "costo_proveedor": "Costo proveedor"}
+    )
 
 
 def _build_discontinued(supplier_not_in_provider) -> pd.DataFrame:

@@ -4,7 +4,7 @@ App Streamlit para analizar compras de Jugando y Educando a partir de:
 
 - `SDOSXSUC.CSV`
 - `INVEPTOS.XLS`
-- plantilla proveedor con `EAN-13` y `Costo proveedor`
+- plantilla proveedor con `EAN-13`, `Nombre` y `Costo proveedor`
 
 ## Ejecutar localmente
 

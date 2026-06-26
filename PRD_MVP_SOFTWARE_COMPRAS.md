@@ -106,10 +106,11 @@ La app debe permitir descargar una plantilla vacía con estas columnas obligator
 
 ```text
 EAN-13
+Nombre
 Costo proveedor
 ```
 
-La app recibirá esta plantilla ya normalizada. Se asume que todo producto listado está disponible para compra.
+La app recibirá esta plantilla ya normalizada. Se asume que todo producto listado está disponible para compra. `Nombre` corresponde al nombre del producto en la lista del proveedor y se usa especialmente para la salida de productos nuevos.
 
 Se asume una sola fila por EAN. Si hay duplicados, deben ir a problemas de datos.
 
@@ -577,7 +578,7 @@ El análisis debe bloquearse si:
 - no se carga plantilla proveedor;
 - falta una columna obligatoria crítica;
 - el comodín ingresado no aparece en `SDOSXSUC`;
-- la plantilla proveedor no tiene `EAN-13` o `Costo proveedor`.
+- la plantilla proveedor no tiene `EAN-13`, `Nombre` o `Costo proveedor`.
 
 El análisis debe continuar con advertencia si:
 
