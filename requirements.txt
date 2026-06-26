@@ -3,4 +3,3 @@ streamlit
 xlrd
 openpyxl
 xlsxwriter
-reportlab

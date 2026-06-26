@@ -1,7 +1,6 @@
 __pycache__/
 .pytest_cache/
 .DS_Store
-tmp/
 
 *.csv
 *.CSV
@@ -9,7 +8,5 @@ tmp/
 *.XLS
 *.xlsx
 *.XLSX
-*.pdf
-*.PDF
 
 !.streamlit/

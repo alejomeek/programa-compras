@@ -54,11 +54,9 @@ class AnalysisConfig:
 @dataclass
 class AnalysisResult:
     summary: pd.DataFrame
-    carmen_file: pd.DataFrame
     inventory_objective: pd.DataFrame
     purchase: pd.DataFrame
     purchase_summary: pd.DataFrame
-    purchase_order_items: pd.DataFrame
     transfers: pd.DataFrame
     manual_review: pd.DataFrame
     cost_changes: pd.DataFrame
@@ -119,7 +117,6 @@ def analyze(
     stockout_minimums = {loc: int((config.stockout_minimums or {}).get(loc, 1)) for loc in OPERATIVE_LOCATIONS}
 
     sdos = _prepare_sdos(sdos_df, config.fair_mode, issues)
-    carmen_file = _build_carmen_file(sdos_df, config.fair_mode)
     provider = _prepare_provider(provider_df, issues)
 
     supplier_all = sdos[sdos["comodin"] == supplier_code].copy()
@@ -159,7 +156,6 @@ def analyze(
     sales_by_ean = sales_prepared.set_index("ean") if not sales_prepared.empty else pd.DataFrame()
     purchase_rows: list[dict] = []
     purchase_summary_rows: list[dict] = []
-    purchase_order_rows: list[dict] = []
     inventory_objective_rows: list[dict] = []
     transfer_rows: list[dict] = []
     review_rows: list[dict] = []
@@ -185,7 +181,6 @@ def analyze(
         inventory_objective_rows.append(_as_inventory_objective(result["purchase"], "Comprable"))
         purchase_rows.append(result["purchase"])
         purchase_summary_rows.append(result["purchase_summary"])
-        purchase_order_rows.extend(_as_purchase_order_rows(result["purchase"], provider_row["costo_proveedor"], "Existente"))
         transfer_rows.extend(result["transfers"])
         review_rows.extend(result["manual_review"])
 
@@ -220,8 +215,6 @@ def analyze(
     no_tbc_cost = _build_no_tbc_cost(supplier_products, provider_valid, sales_prepared)
     cost_changes = _build_cost_changes(supplier_products, provider_valid, sales_prepared)
     new_products = _build_new_products(provider_not_in_sdos)
-    purchase_order_rows.extend(_new_product_purchase_order_rows(new_products))
-    purchase_order_items = pd.DataFrame(purchase_order_rows)
     discontinued = _build_discontinued(supplier_not_in_provider)
     data_issues = pd.DataFrame(issues)
     summary = _build_summary(
@@ -243,11 +236,9 @@ def analyze(
 
     return AnalysisResult(
         summary=summary,
-        carmen_file=_clean_df(carmen_file),
         inventory_objective=_order_inventory_objective_columns(_clean_df(inventory_objective)),
         purchase=_order_purchase_columns(_clean_df(purchase)),
         purchase_summary=_order_purchase_summary_columns(_clean_df(purchase_summary)),
-        purchase_order_items=_order_purchase_order_columns(_clean_df(purchase_order_items)),
         transfers=_clean_df(transfers),
         manual_review=_order_manual_review_columns(_clean_df(manual_review)),
         cost_changes=_clean_df(cost_changes),
@@ -266,7 +257,6 @@ def result_to_excel(result: AnalysisResult) -> bytes:
     output = BytesIO()
     sheets = {
         "Resumen": result.summary,
-        "Archivo Carmen": result.carmen_file,
         "Inventario objetivo": result.inventory_objective,
         "Compra sugerida": result.purchase,
         "Compra sugerida resumida": result.purchase_summary,
@@ -748,17 +738,6 @@ def _sdos_inventory_mapping(fair_mode: bool) -> dict[str, str]:
     }
 
 
-def _build_carmen_file(sdos_df: pd.DataFrame, fair_mode: bool) -> pd.DataFrame:
-    carmen = sdos_df.copy().fillna("")
-    mapping = _sdos_inventory_mapping(fair_mode)
-    renamed_columns = {}
-    for col in carmen.columns:
-        if re.fullmatch(r"us\d{2}", str(col)):
-            location = mapping.get(col, "Sin mapeo")
-            renamed_columns[col] = f"{col} | {location}"
-    return carmen.rename(columns=renamed_columns)
-
-
 def _extract_supplier_code(value) -> str:
     text = str(value).strip()
     match = re.match(r"^\.(\d{3})", text)
@@ -873,67 +852,6 @@ def _order_purchase_summary_columns(df: pd.DataFrame) -> pd.DataFrame:
                 f"{loc} | Compra sugerida",
             ]
         )
-    existing = [col for col in ordered if col in df.columns]
-    rest = [col for col in df.columns if col not in existing]
-    return df[existing + rest]
-
-
-def _as_purchase_order_rows(purchase_row: dict, unit_cost, status: str) -> list[dict]:
-    rows: list[dict] = []
-    for loc in OPERATIVE_LOCATIONS:
-        suggested = int(purchase_row.get(f"{loc} | Compra sugerida", 0) or 0)
-        rows.append(
-            {
-                "Estado producto": status,
-                "Punto": loc,
-                "SKU": purchase_row.get("SKU", ""),
-                "EAN": purchase_row.get("EAN", ""),
-                "Producto": purchase_row.get("Producto", ""),
-                "Compra sugerida": suggested,
-                "Compra final": suggested,
-                "Costo unitario": unit_cost,
-                "Total línea": suggested * (unit_cost or 0),
-            }
-        )
-    return rows
-
-
-def _new_product_purchase_order_rows(new_products: pd.DataFrame) -> list[dict]:
-    rows: list[dict] = []
-    if new_products.empty:
-        return rows
-    for _, product in new_products.iterrows():
-        for loc in OPERATIVE_LOCATIONS:
-            rows.append(
-                {
-                    "Estado producto": "Nuevo",
-                    "Punto": loc,
-                    "SKU": "NUEVO",
-                    "EAN": product.get("EAN", ""),
-                    "Producto": product.get("Nombre", ""),
-                    "Compra sugerida": 0,
-                    "Compra final": 0,
-                    "Costo unitario": product.get("Costo proveedor", 0),
-                    "Total línea": 0,
-                }
-            )
-    return rows
-
-
-def _order_purchase_order_columns(df: pd.DataFrame) -> pd.DataFrame:
-    if df.empty:
-        return df
-    ordered = [
-        "Estado producto",
-        "Punto",
-        "SKU",
-        "EAN",
-        "Producto",
-        "Compra sugerida",
-        "Compra final",
-        "Costo unitario",
-        "Total línea",
-    ]
     existing = [col for col in ordered if col in df.columns]
     rest = [col for col in df.columns if col not in existing]
     return df[existing + rest]
