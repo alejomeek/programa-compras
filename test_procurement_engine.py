@@ -1,6 +1,7 @@
 from io import BytesIO
 
 import pandas as pd
+from openpyxl import load_workbook
 
 from procurement_engine import (
     AnalysisConfig,
@@ -52,6 +53,12 @@ def test_purchase_order_workbook_round_trip():
     assert (result.purchase_orders[OPERATIVE_LOCATIONS] == "NUEVO").any().any()
 
     workbook = BytesIO(result_to_excel(result))
+    formula_workbook = load_workbook(BytesIO(workbook.getvalue()), data_only=False)
+    order_ws = formula_workbook["Ordenes de Compra"]
+    assert order_ws["D2"].value == "='Compra sugerida resumida'!F2"
+    first_new_formula_row = next(row for row in range(2, order_ws.max_row + 1) if order_ws.cell(row, 1).value in (None, ""))
+    assert order_ws.cell(first_new_formula_row, 4).value == "NUEVO"
+
     order_sheet = pd.read_excel(workbook, sheet_name="Ordenes de Compra", dtype=str)
     order_sheet.loc[:, OPERATIVE_LOCATIONS] = "0"
     first_new = order_sheet.index[order_sheet["SKU"].fillna("").eq("")][0]

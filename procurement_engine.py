@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import BinaryIO
 
 import pandas as pd
+from xlsxwriter.utility import xl_rowcol_to_cell
 
 
 OPERATIVE_LOCATIONS = ["Av. 19", "Bulevar", "Oviedo", "Bvista", "Calle 74", "CEDI"]
@@ -304,6 +305,7 @@ def result_to_excel(result: AnalysisResult) -> bytes:
             safe_name = sheet_name[:31]
             df.to_excel(writer, sheet_name=safe_name, index=False)
             worksheet = writer.sheets[safe_name]
+            order_formula_map = _purchase_order_formula_map(result) if sheet_name == "Ordenes de Compra" else {}
             if not df.empty:
                 freeze_col = 3 if list(df.columns[:3]) == ["SKU", "EAN", "Producto"] else 0
                 worksheet.freeze_panes(1, freeze_col)
@@ -328,6 +330,11 @@ def result_to_excel(result: AnalysisResult) -> bytes:
                 worksheet.write(0, idx, col, header_format)
                 if sheet_name in {"Compra sugerida resumida", "Ordenes de Compra"} and body_format is not None:
                     for row_idx, value in enumerate(df[col].tolist(), start=1):
+                        formula = order_formula_map.get((row_idx, col))
+                        if formula:
+                            cached_value = 0 if pd.isna(value) else value
+                            worksheet.write_formula(row_idx, idx, formula, body_format, cached_value)
+                            continue
                         if pd.isna(value):
                             worksheet.write_blank(row_idx, idx, None, body_format)
                         else:
@@ -336,6 +343,30 @@ def result_to_excel(result: AnalysisResult) -> bytes:
         metadata.to_excel(writer, sheet_name="_Datos OC", index=False)
         writer.sheets["_Datos OC"].hide()
     return output.getvalue()
+
+
+def _purchase_order_formula_map(result: AnalysisResult) -> dict[tuple[int, str], str]:
+    if result.purchase_orders.empty or result.purchase_summary.empty:
+        return {}
+    summary_by_ean = {
+        str(row.get("EAN", "")).strip(): idx
+        for idx, row in result.purchase_summary.reset_index(drop=True).iterrows()
+        if str(row.get("EAN", "")).strip()
+    }
+    formulas: dict[tuple[int, str], str] = {}
+    for order_idx, row in result.purchase_orders.reset_index(drop=True).iterrows():
+        ean = str(row.get("EAN", "")).strip()
+        summary_idx = summary_by_ean.get(ean)
+        if summary_idx is None:
+            continue
+        for loc in OPERATIVE_LOCATIONS:
+            summary_col = f"{loc} | Compra sugerida"
+            if summary_col not in result.purchase_summary.columns:
+                continue
+            summary_col_idx = result.purchase_summary.columns.get_loc(summary_col)
+            source_cell = xl_rowcol_to_cell(summary_idx + 1, summary_col_idx)
+            formulas[(order_idx + 1, loc)] = f"='Compra sugerida resumida'!{source_cell}"
+    return formulas
 
 
 def read_purchase_orders(source: str | Path | BinaryIO) -> pd.DataFrame:
