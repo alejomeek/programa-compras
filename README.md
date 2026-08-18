@@ -23,3 +23,7 @@ streamlit run app.py
    - Main file path: `app.py`
 
 La app no requiere secrets ni base de datos.
+
+## Instructivo para usuarios
+
+Ver [INSTRUCTIVO_USO_APP_COMPRAS.md](INSTRUCTIVO_USO_APP_COMPRAS.md) para una guia amigable de uso, explicacion de archivos, lectura de resultados y generacion de ordenes de compra.

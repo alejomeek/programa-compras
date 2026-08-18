@@ -9,4 +9,7 @@ __pycache__/
 *.xlsx
 *.XLSX
 
+# Cotizaciones/ordenes de compra reales generadas por la app (datos comerciales)
+COT-*.pdf
+
 !.streamlit/
