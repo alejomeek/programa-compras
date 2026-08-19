@@ -15,7 +15,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import type { NavItem } from "@/lib/nav";
+import type { NavLinkItem } from "@/lib/nav";
 import type { SessionUser } from "@/types/profile";
 
 /**
@@ -28,7 +28,7 @@ import type { SessionUser } from "@/types/profile";
  * El drawer se cierra al navegar; de lo contrario tapa la pagina recien
  * cargada y obliga a un gesto extra.
  */
-export function MobileNav({ items, user }: { items: NavItem[]; user: SessionUser }) {
+export function MobileNav({ items, user }: { items: NavLinkItem[]; user: SessionUser }) {
   const [open, setOpen] = useState(false);
 
   return (

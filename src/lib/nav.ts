@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   ArrowLeftRight,
@@ -45,6 +46,23 @@ export const NAV_ITEMS: readonly NavItem[] = [
 export function navItemsForRole(role: Role): NavItem[] {
   return NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin(role));
 }
+
+/**
+ * Forma serializable de una entrada de menu para cruzar el limite
+ * servidor -> Client Component.
+ *
+ * `NavItem.icon` es una referencia a un componente (funcion), y React no
+ * puede pasar funciones como prop de un Server Component a un Client
+ * Component: solo acepta datos planos o elementos ya renderizados (JSX). Por
+ * eso el icono se resuelve a un `ReactNode` (`<Icon />`) ANTES de cruzar ese
+ * limite, en vez de mandar el tipo del componente y resolverlo del lado del
+ * cliente.
+ */
+export type NavLinkItem = {
+  href: string;
+  label: string;
+  icon: ReactNode;
+};
 
 /**
  * Decide si una entrada debe marcarse como activa para la ruta actual.

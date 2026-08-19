@@ -4,7 +4,7 @@ import { AppLogo } from "@/components/layout/app-logo";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { SidebarFooter } from "@/components/layout/sidebar-footer";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
-import { navItemsForRole } from "@/lib/nav";
+import { navItemsForRole, type NavLinkItem } from "@/lib/nav";
 import type { SessionUser } from "@/types/profile";
 
 /**
@@ -18,7 +18,14 @@ import type { SessionUser } from "@/types/profile";
  * no protege una ruta.
  */
 export function AppShell({ user, children }: { user: SessionUser; children: ReactNode }) {
-  const items = navItemsForRole(user.profile.role);
+  // El icono se resuelve a elemento AQUI, en servidor: `SidebarNav`/`MobileNav`
+  // son Client Components y no pueden recibir la referencia al componente del
+  // icono como prop (no es serializable), solo el elemento ya renderizado.
+  const items: NavLinkItem[] = navItemsForRole(user.profile.role).map((item) => ({
+    href: item.href,
+    label: item.label,
+    icon: <item.icon aria-hidden="true" className="size-4 shrink-0" />,
+  }));
 
   return (
     <div className="flex min-h-svh flex-col md:flex-row">

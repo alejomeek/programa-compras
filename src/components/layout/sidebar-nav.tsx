@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { isNavItemActive, type NavItem } from "@/lib/nav";
+import { isNavItemActive, type NavLinkItem } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
 type SidebarNavProps = {
-  items: NavItem[];
+  items: NavLinkItem[];
   /** Se invoca al navegar; lo usa el drawer movil para cerrarse. */
   onNavigate?: () => void;
   className?: string;
@@ -28,7 +28,6 @@ export function SidebarNav({ items, onNavigate, className }: SidebarNavProps) {
     <nav aria-label="Navegación principal" className={cn("flex flex-col gap-1", className)}>
       {items.map((item) => {
         const active = isNavItemActive(item.href, pathname);
-        const Icon = item.icon;
 
         return (
           <Link
@@ -44,7 +43,7 @@ export function SidebarNav({ items, onNavigate, className }: SidebarNavProps) {
                 : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
             )}
           >
-            <Icon aria-hidden="true" className="size-4 shrink-0" />
+            {item.icon}
             <span className="truncate">{item.label}</span>
           </Link>
         );
