@@ -27,7 +27,7 @@ export async function updateSession(request: NextRequest) {
     throw error;
   }
 
-  const supabase = createServerClient(env.url, env.anonKey, {
+  const supabase = createServerClient(env.url, env.publishableKey, {
     cookies: {
       getAll() {
         return request.cookies.getAll();

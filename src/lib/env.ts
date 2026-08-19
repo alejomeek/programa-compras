@@ -8,8 +8,8 @@
  *    modulo) para que `next build` pueda compilar en un entorno sin variables
  *    todavia configuradas. El fallo ocurre en tiempo de ejecucion, cuando de
  *    verdad se necesita hablar con Supabase.
- *  - Solo se exponen al navegador la URL y la anon key (`NEXT_PUBLIC_*`).
- *    La `service_role` jamas se lee aqui ni llega al cliente.
+ *  - Solo se exponen al navegador la URL y la publishable key (`NEXT_PUBLIC_*`).
+ *    La `service_role`/`secret` jamas se lee aqui ni llega al cliente.
  */
 
 /** Error de configuracion: distingue "la app no esta configurada" de "las credenciales del usuario son incorrectas". */
@@ -37,7 +37,7 @@ function requireEnv(name: string, value: string | undefined): string {
 
 export type SupabaseEnv = {
   url: string;
-  anonKey: string;
+  publishableKey: string;
 };
 
 /**
@@ -46,13 +46,18 @@ export type SupabaseEnv = {
  * Se referencian `process.env.NEXT_PUBLIC_*` de forma literal a proposito:
  * Next.js sustituye estas expresiones en tiempo de compilacion para el bundle
  * del navegador y no puede hacerlo con acceso dinamico (`process.env[name]`).
+ *
+ * `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` es la clave publica del modelo nuevo
+ * de API keys de Supabase (reemplaza a la `anon key`/`NEXT_PUBLIC_SUPABASE_ANON_KEY`
+ * del modelo anterior). No se admite el nombre viejo: si el proyecto sigue en
+ * el modelo anterior, renombra la variable en Supabase o en `.env.local`.
  */
 export function getSupabaseEnv(): SupabaseEnv {
   return {
     url: requireEnv("NEXT_PUBLIC_SUPABASE_URL", process.env.NEXT_PUBLIC_SUPABASE_URL),
-    anonKey: requireEnv(
-      "NEXT_PUBLIC_SUPABASE_ANON_KEY",
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    publishableKey: requireEnv(
+      "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
     ),
   };
 }
@@ -76,8 +81,8 @@ export function missingSupabaseEnvVars(): string[] {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()) {
     missing.push("NEXT_PUBLIC_SUPABASE_URL");
   }
-  if (!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()) {
-    missing.push("NEXT_PUBLIC_SUPABASE_ANON_KEY");
+  if (!process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim()) {
+    missing.push("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY");
   }
   return missing;
 }

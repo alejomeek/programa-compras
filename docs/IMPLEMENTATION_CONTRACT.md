@@ -343,7 +343,7 @@ Con este contrato publicado, la Fase 0 quedó cerrada. El usuario decidió abrir
 Nadie ha iniciado sesión todavía contra un backend real — es trabajo humano, no delegable (runbook §9):
 
 1. Crear el proyecto Supabase de desarrollo (`compras-dev`) y aplicar `supabase/migrations/0001..0005` en orden.
-2. Copiar `.env.example` a `.env.local` y completar `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY` del proyecto (nunca pegar esos valores en el chat).
+2. Copiar `.env.example` a `.env.local` y completar `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` del proyecto (nunca pegar esos valores en el chat).
 3. Registrar un usuario en la app y promoverlo a `admin` con el `UPDATE` documentado al final de `supabase/seed.sql`.
 4. Confirmar que ese usuario ve sidebar completo (incluida Configuración) y que un usuario sin promover ve el sidebar sin Configuración — es el criterio de salida real del plan §12 Fase 0/runbook Fase 1.
 5. Opcional: correr `supabase/seed.sql` para tener proveedores/productos ficticios de prueba en `/catalog` cuando exista esa UI (Fase 2).

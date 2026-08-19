@@ -12,10 +12,10 @@ import { getSupabaseEnv } from "@/lib/env";
  * rutas de servidor de fases posteriores con su propio cliente privilegiado.
  */
 export async function createClient() {
-  const { url, anonKey } = getSupabaseEnv();
+  const { url, publishableKey } = getSupabaseEnv();
   const cookieStore = await cookies();
 
-  return createServerClient(url, anonKey, {
+  return createServerClient(url, publishableKey, {
     cookies: {
       getAll() {
         return cookieStore.getAll();

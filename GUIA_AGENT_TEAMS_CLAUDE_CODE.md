@@ -80,10 +80,12 @@ Crear localmente `.env.local` a partir de `.env.example` cuando este exista. Sec
 
 ```text
 NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 SUPABASE_DB_URL=
 ```
+
+(Convención de API keys nueva de Supabase: `PUBLISHABLE_KEY`/`SECRET_KEY` en vez de `ANON_KEY`/`SERVICE_ROLE_KEY`. Si el proyecto sigue en el modelo anterior, usa el nombre que corresponda a tu panel de Supabase.)
 
 Nunca pegar valores de esas variables en un prompt, un chat, un commit, un archivo de documentación ni una tarea de agente.
 
