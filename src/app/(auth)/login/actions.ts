@@ -6,11 +6,13 @@ import { redirect } from "next/navigation";
 import { MissingEnvError } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 
-export type LoginState = {
-  error: string | null;
-};
+import type { LoginState } from "./login-state";
 
-export const INITIAL_LOGIN_STATE: LoginState = { error: null };
+// Re-exportado solo como tipo: un modulo "use server" unicamente puede
+// exportar funciones async en tiempo de ejecucion (Next.js lo rechaza en
+// build). El estado inicial (un objeto, no una funcion) vive en
+// ./login-state, sin la directiva "use server".
+export type { LoginState };
 
 /**
  * Inicia sesion contra Supabase Auth.

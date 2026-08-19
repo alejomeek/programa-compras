@@ -4,7 +4,8 @@ import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import { AlertCircle } from "lucide-react";
 
-import { INITIAL_LOGIN_STATE, signIn } from "@/app/(auth)/login/actions";
+import { signIn } from "@/app/(auth)/login/actions";
+import { INITIAL_LOGIN_STATE } from "@/app/(auth)/login/login-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
