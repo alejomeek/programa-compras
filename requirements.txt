@@ -4,3 +4,11 @@ xlrd
 openpyxl
 xlsxwriter
 reportlab
+
+# psycopg[binary] es de api/imports_process.py (funcion Python de Vercel de
+# Fase 2), no del MVP Streamlit de arriba. Va aqui, no solo en
+# api/requirements.txt, porque Vercel instala las dependencias Python del
+# proyecto UNICAMENTE desde este requirements.txt de la raiz: un
+# requirements.txt propio dentro de api/ se ignora en el build real (hotfix
+# de produccion, ver api/requirements.txt para el detalle completo).
+psycopg[binary]>=3.1

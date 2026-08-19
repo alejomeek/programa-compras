@@ -47,7 +47,20 @@ export type UploadHandler = (
     /** Porcentaje 0–100. Si el handler no lo llama, la barra queda indeterminada. */
     onProgress: (percent: number) => void;
   },
-) => Promise<void>;
+) => Promise<UploadOutcome | void>;
+
+/**
+ * Resultado de una subida que SÍ se completó (el archivo se guardó y el
+ * `import_job` se creó) pero con una advertencia: hoy la única es que el
+ * procesamiento automático no arrancó (`processingTriggered: false` en
+ * `POST /api/imports`, ver `processing-warning.ts`). No es un error — no se
+ * lanza — porque tratarlo como error confundiría al usuario haciéndole creer
+ * que debe volver a subir el archivo, cuando en realidad ya quedó creado y
+ * "En cola".
+ */
+export type UploadOutcome = {
+  warning?: string | null;
+};
 
 export type FileDropzoneProps = {
   type: ImportType;
@@ -78,6 +91,8 @@ export function FileDropzone({
   const [phase, setPhase] = useState<Phase>("idle");
   const [percent, setPercent] = useState<number | null>(null);
   const [dragging, setDragging] = useState(false);
+  /** Advertencia de una subida que sí se completó (ver `UploadOutcome`). */
+  const [warning, setWarning] = useState<string | null>(null);
 
   const definition = importTypeDefinition(type);
   const bloqueado = Boolean(disabledReason) || !onUpload;
@@ -86,6 +101,7 @@ export function FileDropzone({
   function seleccionar(candidate: File | undefined) {
     setPhase("idle");
     setPercent(null);
+    setWarning(null);
 
     if (!candidate) {
       setFile(null);
@@ -113,6 +129,7 @@ export function FileDropzone({
     setError(null);
     setPhase("idle");
     setPercent(null);
+    setWarning(null);
     if (inputRef.current) {
       inputRef.current.value = "";
     }
@@ -144,14 +161,16 @@ export function FileDropzone({
     setPhase("uploading");
     setPercent(null);
     setError(null);
+    setWarning(null);
 
     try {
-      await onUpload(
+      const outcome = await onUpload(
         { file, type, supplierId },
         { onProgress: (value) => setPercent(clampPercent(value)) },
       );
       setPhase("done");
       setPercent(100);
+      setWarning(outcome?.warning ?? null);
       onUploaded?.();
     } catch (cause) {
       setPhase("error");
@@ -250,6 +269,15 @@ export function FileDropzone({
       {/* Region viva: anuncia validacion, progreso y resultado sin mover el foco. */}
       <div aria-live="polite" className="space-y-2">
         <p className="text-sm text-muted-foreground">{mensajeEstado}</p>
+        {phase === "done" && warning ? (
+          <Alert>
+            <AlertTitle>El procesamiento no se inició</AlertTitle>
+            <AlertDescription>
+              {warning} El archivo sí se guardó y la importación quedó en cola: aparece en la
+              tabla de abajo, pero necesita otro intento antes de tener datos.
+            </AlertDescription>
+          </Alert>
+        ) : null}
         {phase === "uploading" || phase === "done" ? (
           <Progress
             value={percent ?? 0}

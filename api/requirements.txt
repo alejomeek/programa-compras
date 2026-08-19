@@ -1,6 +1,17 @@
 # Dependencias de la función Python de Vercel api/imports_process.py.
-# Independiente de requirements.txt de la raíz (MVP Streamlit, no se toca) y
-# de engine/requirements.txt (que además declara xlwt, solo de pruebas).
+#
+# HALLAZGO DE HOTFIX DE PRODUCCIÓN: este archivo documenta las dependencias
+# reales de la función, pero Vercel NO lo lee — instala las dependencias
+# Python del proyecto únicamente desde el requirements.txt de la raíz, sin
+# importar en qué subcarpeta vive la función. Creer que este archivo bastaba
+# fue la causa de un 500 en producción (psycopg nunca se instalaba, así que
+# `_connection()` fallaba con `ModuleNotFoundError` en cuanto se necesitaba).
+# Por eso psycopg[binary] también está declarado en la raíz: si esta lista
+# cambia, hay que reflejar el cambio ahí también.
+#
+# Sigue siendo independiente de engine/requirements.txt (que además declara
+# xlwt, solo de pruebas) y del resto de la raíz (MVP Streamlit, no se toca
+# salvo por la dependencia de esta función).
 #
 # psycopg es la elección del lead al conectar esta ruta (import-backend dejó
 # la conexión inyectada y sin driver fijo a propósito, ver engine/persistence.py).
