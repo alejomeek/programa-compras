@@ -3,8 +3,9 @@
 import { useState } from "react";
 
 import { ImportsView, type ImportsViewProps } from "@/components/imports/imports-view";
-import type { UploadHandler } from "@/components/imports/file-dropzone";
+import type { UploadHandler, UploadOutcome } from "@/components/imports/file-dropzone";
 import { createClient } from "@/lib/supabase/client";
+import { processingWarning } from "./processing-warning";
 import type { ImportJobRow } from "./types";
 
 type Props = Omit<ImportsViewProps, "onUpload" | "uploadDisabledReason" | "onSelectJob">;
@@ -105,8 +106,15 @@ export function ImportsPageClient({ jobs: initialJobs, ...props }: Props) {
       const body = await confirmResponse.json().catch(() => ({}) as { error?: string });
       throw new Error(body.error ?? "No se pudo crear la importación.");
     }
+    const confirmBody = (await confirmResponse.json()) as {
+      processingTriggered: boolean;
+      processingError: string | null;
+    };
 
     onProgress(100);
+
+    const warning = processingWarning(confirmBody);
+    return warning ? ({ warning } satisfies UploadOutcome) : undefined;
   };
 
   return <ImportsView {...props} jobs={jobs} onUpload={onUpload} onSelectJob={onSelectJob} />;
