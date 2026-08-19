@@ -150,15 +150,18 @@ Convenciones de tipo transversales: PK `uuid default gen_random_uuid()`; dinero 
 | 0003 | `0003_locations.sql` | `locations` | 1 |
 | 0004 | `0004_suppliers_products.sql` | `suppliers`, `products`, `supplier_products` | 1 |
 | 0005 | `0005_files.sql` | `files` | 1 |
-| 0006 | `0006_import_jobs.sql` | `import_jobs`, `import_issues` | 2 |
-| 0007 | `0007_price_lists.sql` | `price_lists`, `price_list_items` + trigger de inmutabilidad | 2 |
-| 0008 | `0008_sales.sql` | `sales_imports`, `sales_lines` | 2 |
-| 0009 | `0009_inventory.sql` | `inventory_snapshots`, `inventory_lines` | 2 |
-| 0010 | `0010_purchase_runs.sql` | `purchase_runs`, `purchase_run_target_days`, `purchase_run_lines`, `purchase_line_adjustments` + triggers de concurrencia/auditoría | 3 |
-| 0011 | `0011_purchase_orders.sql` | `purchase_orders`, `purchase_order_items`, numeración | 4 |
-| 0012 | `0012_audit_events.sql` | `audit_events` (append-only) | 4 |
-| 0013 | `0013_views.sql` | `latest_supplier_prices`, `cost_changes`, `purchase_run_summary`, `import_issues_view` (`security_invoker = true`) | 4 |
-| 0014 | `0014_storage_buckets.sql` | 3 buckets privados + políticas sobre `storage.objects` | 1 (buckets) / 4 (PDF) |
+| 0006 | `0006_grant_authenticated_privileges.sql` | **Ya aplicada** (fix post-Fase 1, no planificada originalmente): `grant` explícito a `authenticated` sobre las 6 tablas de 0001-0005. RLS filtra filas, pero sin este `grant` de tabla Postgres deniega antes de evaluar RLS — el supuesto de que los privilegios por defecto de Supabase lo cubrían no se cumplió en este proyecto. | 1 |
+| 0007 | `0007_import_jobs.sql` | `import_jobs`, `import_issues` | 2 |
+| 0008 | `0008_price_lists.sql` | `price_lists`, `price_list_items` + trigger de inmutabilidad | 2 |
+| 0009 | `0009_sales.sql` | `sales_imports`, `sales_lines` | 2 |
+| 0010 | `0010_inventory.sql` | `inventory_snapshots`, `inventory_lines` | 2 |
+| 0011 | `0011_purchase_runs.sql` | `purchase_runs`, `purchase_run_target_days`, `purchase_run_lines`, `purchase_line_adjustments` + triggers de concurrencia/auditoría | 3 |
+| 0012 | `0012_purchase_orders.sql` | `purchase_orders`, `purchase_order_items`, numeración | 4 |
+| 0013 | `0013_audit_events.sql` | `audit_events` (append-only) | 4 |
+| 0014 | `0014_views.sql` | `latest_supplier_prices`, `cost_changes`, `purchase_run_summary`, `import_issues_view` (`security_invoker = true`) | 4 |
+| 0015 | `0015_storage_buckets.sql` | 3 buckets privados + políticas sobre `storage.objects` | 1 (buckets) / 4 (PDF) |
+
+Nota: cada migración nueva a partir de aquí debe seguir concediendo explícitamente los privilegios de tabla a `authenticated` (`select`/`insert`/`update` según corresponda, nunca por defecto) en el mismo archivo que crea la tabla — no depender de privilegios por defecto de Supabase, por la razón documentada en 0006.
 
 ### 6.3 Tablas — columnas y constraints esenciales
 
@@ -353,5 +356,5 @@ Nadie ha iniciado sesión todavía contra un backend real — es trabajo humano,
 - El trigger `on_auth_user_created` sobre `auth.users` se creó y probó como superusuario en el contenedor efímero; en Supabase hosted corre como `postgres`, que debería tener permiso, pero es el punto con más probabilidad de fallar si el proyecto tiene alguna restricción particular.
 - Las políticas RLS asumen que el rol `authenticated` tiene `GRANT` por defecto sobre las tablas nuevas de `public` (comportamiento estándar de Supabase, confirmado en la imagen oficial de Docker).
 - `src/types/profile.ts` es un tipo TypeScript escrito a mano; reemplazar por `supabase gen types` en cuanto exista el proyecto — hoy una columna renombrada rompe en runtime, no en compilación.
-- `0014_storage_buckets.sql` (los 3 buckets privados) no se implementó todavía — no estaba en el alcance de `db-auth` para Fase 1; queda para cuando `imports-ui`/`order-domain` lo necesiten (Fase 2/4).
+- `0015_storage_buckets.sql` (los 3 buckets privados) no se implementó todavía — no estaba en el alcance de `db-auth` para Fase 1; queda para cuando `imports-ui`/`order-domain` lo necesiten (Fase 2/4).
 - CI aún no existe: decidir si `xlwt` (dependencia de solo-pruebas de `engine-core`) se instala en el pipeline, o si las 6 pruebas del lector `.xls` quedan como `skipped` ahí.
