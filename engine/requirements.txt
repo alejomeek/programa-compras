@@ -1,0 +1,14 @@
+# Dependencias del motor de dominio (engine/).
+# Independiente de requirements.txt de la raíz, que es del MVP Streamlit viejo
+# y no se toca. El motor nuevo no depende de streamlit ni de xlsxwriter.
+
+# --- Ejecución ---
+pandas>=2.0            # lectura y normalización de las tres fuentes
+xlrd>=2.0              # .xls legado (BIFF) de INVEPTOS, con encoding explícito
+openpyxl>=3.1          # .xlsx de listas de precios de proveedor
+
+# --- Solo pruebas ---
+pytest>=8.0
+xlwt>=1.3              # genera .xls legado sintético en memoria (pandas 2.x ya
+                       # no escribe ese formato). Si falta, las pruebas de
+                       # INVEPTOS se saltan con skip, no fallan.
