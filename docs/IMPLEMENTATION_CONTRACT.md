@@ -151,15 +151,18 @@ Convenciones de tipo transversales: PK `uuid default gen_random_uuid()`; dinero 
 | 0004 | `0004_suppliers_products.sql` | `suppliers`, `products`, `supplier_products` | 1 |
 | 0005 | `0005_files.sql` | `files` | 1 |
 | 0006 | `0006_grant_authenticated_privileges.sql` | **Ya aplicada** (fix post-Fase 1, no planificada originalmente): `grant` explícito a `authenticated` sobre las 6 tablas de 0001-0005. RLS filtra filas, pero sin este `grant` de tabla Postgres deniega antes de evaluar RLS — el supuesto de que los privilegios por defecto de Supabase lo cubrían no se cumplió en este proyecto. | 1 |
-| 0007 | `0007_import_jobs.sql` | `import_jobs`, `import_issues` | 2 |
-| 0008 | `0008_price_lists.sql` | `price_lists`, `price_list_items` + trigger de inmutabilidad | 2 |
-| 0009 | `0009_sales.sql` | `sales_imports`, `sales_lines` | 2 |
-| 0010 | `0010_inventory.sql` | `inventory_snapshots`, `inventory_lines` | 2 |
-| 0011 | `0011_purchase_runs.sql` | `purchase_runs`, `purchase_run_target_days`, `purchase_run_lines`, `purchase_line_adjustments` + triggers de concurrencia/auditoría | 3 |
-| 0012 | `0012_purchase_orders.sql` | `purchase_orders`, `purchase_order_items`, numeración | 4 |
-| 0013 | `0013_audit_events.sql` | `audit_events` (append-only) | 4 |
-| 0014 | `0014_views.sql` | `latest_supplier_prices`, `cost_changes`, `purchase_run_summary`, `import_issues_view` (`security_invoker = true`) | 4 |
-| 0015 | `0015_storage_buckets.sql` | 3 buckets privados + políticas sobre `storage.objects` | 1 (buckets) / 4 (PDF) |
+| 0007 | `0007_import_jobs.sql` | `import_jobs`, `import_issues` (9 códigos reales, `code` como `text` + check de formato, no enum) | 2 |
+| 0008 | `0008_price_lists.sql` | `price_lists`, `price_list_items` + trigger de inmutabilidad (lista blanca de transiciones, ver §9.1) | 2 |
+| 0009 | `0009_sales.sql` | `sales_imports`, `sales_lines`; solo lectura para `authenticated`, escritura de `service_role` | 2 |
+| 0010 | `0010_inventory.sql` | `inventory_snapshots`, `inventory_lines`; único índice parcial de "activo" es **por `snapshot_date`**, no global (ver nota en §6.3) | 2 |
+| 0011 | `0011_storage_buckets.sql` | 3 buckets privados + políticas sobre `storage.objects` (adelantado desde Fase 1 porque `import-ui` los necesita para subir archivos) | 2 |
+| 0012 | `0012_harden_fase1_grants.sql` | `revoke all` + `grant` explícito (a `authenticated` **y** `service_role`) sobre las 6 tablas de Fase 1 — la imagen de Supabase concede privilegios de sobra por `alter default privileges`; RLS lo compensaba pero el privilegio efectivo no coincidía con el contrato | 1 (hardening, aplicado en Fase 2) |
+| 0013 | `0013_purchase_runs.sql` | `purchase_runs`, `purchase_run_target_days`, `purchase_run_lines`, `purchase_line_adjustments` + triggers de concurrencia/auditoría | 3 |
+| 0014 | `0014_purchase_orders.sql` | `purchase_orders`, `purchase_order_items`, numeración | 4 |
+| 0015 | `0015_audit_events.sql` | `audit_events` (append-only) | 4 |
+| 0016 | `0016_views.sql` | `latest_supplier_prices`, `cost_changes`, `purchase_run_summary`, `import_issues_view` (`security_invoker = true`) | 4 |
+
+Las migraciones 0001-0012 ya están escritas y verificadas contra un contenedor Postgres efímero (`supabase/tests/run_migration_tests.sh`, 139 asertos) — **0007 en adelante todavía no se aplicó al proyecto Supabase real**, pendiente de confirmación del usuario (§14).
 
 Nota: cada migración nueva a partir de aquí debe seguir concediendo explícitamente los privilegios de tabla a `authenticated` (`select`/`insert`/`update` según corresponda, nunca por defecto) en el mismo archivo que crea la tabla — no depender de privilegios por defecto de Supabase, por la razón documentada en 0006.
 
@@ -177,7 +180,7 @@ Nota: cada migración nueva a partir de aquí debe seguir concediendo explícita
 - **`import_issues`**: `import_job_id fk cascade`, `file_id fk`, `severity`, `code` (`ean_invalido`, `ean_duplicado`, `costo_invalido`, `comodin_invalido`, `fecha_invalida`, `tisuc_desconocido`), `source`, `row_number`, `ean`, `sku`, `product_name`, `detail`.
 - **`sales_imports`**: `import_job_id fk unique`, `supplier_id` nullable, `period_start/period_end`, `period_days` generado, `status` (`active`/`superseded`), `created_by`. Índice único parcial `(supplier_id, period_start, period_end) where status='active'`.
 - **`sales_lines`**: `sales_import_id fk cascade`, `ean not null`, `location_id fk`, `product_id null`, `units_sold integer check(>=0)`, `tbc_cost numeric(14,2)`, `source_row_number`. `unique (sales_import_id, ean, location_id)`.
-- **`inventory_snapshots`**: `import_job_id fk unique`, `snapshot_date date`, `fair_mode boolean default false`, `status`.
+- **`inventory_snapshots`**: `import_job_id fk unique`, `snapshot_date date`, `fair_mode boolean default false`, `status`. Único índice parcial de "activo" es **`(snapshot_date) where status='active'`**, no global — decisión corregida en Fase 2 tras leer el pipeline real de `import-backend` (`engine/persistence.py` usa `supersede_keys=('snapshot_date',)`): un snapshot global habría hecho fallar cualquier importación de una fecha distinta a la última activa.
 - **`inventory_lines`**: `snapshot_id fk cascade`, `ean`, `tbc_sku`, `location_id fk`, `on_hand integer check(>=0)`, `pvp numeric(14,2)`, `supplier_tbc_code char(3)`. `unique (snapshot_id, ean, location_id)`.
 - **`purchase_runs`**: `supplier_id fk restrict`, `sales_import_id fk restrict`, `price_list_id fk restrict`, `inventory_snapshot_id fk null restrict`, `period_start/period_end/period_days`, `status` (`draft`/`calculated`/`locked`/`cancelled`), `engine_version`, `params_hash` (reproducibilidad), `created_by`, `calculated_at`.
 - **`purchase_run_target_days`**: `purchase_run_id fk cascade`, `location_id fk`, `target_days smallint check(>0)`. `unique (run_id, location_id)` — fotografía de días objetivo usados.
@@ -240,7 +243,7 @@ URLs firmadas de vida corta (60–120 s para PDFs/`source-files`, 300 s para `ex
 
 ## 9. Riesgos de datos e historial a respetar
 
-1. **Inmutabilidad de `price_lists` emitidas**: trigger que aborta `update/delete` si `status <> 'draft'`; nueva versión = nueva fila con `supersedes_id`. El costo de una OC emitida se lee siempre del snapshot en `purchase_order_items`, nunca de `price_list_items`.
+1. **Inmutabilidad de `price_lists` emitidas** (corregido en Fase 2 por `data-model`: la redacción original se contradecía — bloquear todo `update` fuera de `draft` habría impedido la propia transición a `superseded` que pide este mismo punto). El trigger real es una lista blanca de transiciones, no un bloqueo total: `delete` siempre se aborta si `status <> 'draft'`; `update` con `status = 'draft'` es libre (incluye publicar `draft → active`); `update` con `status <> 'draft'` solo se permite si la única diferencia es una transición `active → superseded`, `active → archived` o `superseded → archived` — cualquier otra columna que cambie (costo, versión, proveedor, archivo…) aborta, comparado por diff de `to_jsonb` excluyendo `status`/`updated_at`/`updated_by` para que ninguna columna futura se escape por olvido. Un segundo trigger en `price_list_items` aborta cualquier insert/update/delete si la lista padre no está en `draft`. Nueva versión = nueva fila con `supersedes_id`, calculada por Python (`import-backend`) con `select coalesce(max(version),0)+1 ... for update`, no por SQL. El costo de una OC emitida se lee siempre del snapshot en `purchase_order_items`, nunca de `price_list_items`.
 2. **No sobrescribir importaciones usadas**: `sales_imports`/`inventory_snapshots` nunca se actualizan in-place; archivo nuevo ⇒ cabecera nueva `active`, la anterior pasa a `superseded`. `purchase_runs` guarda los ids exactos de las fuentes + `params_hash` para reproducibilidad exacta.
 3. **Fallos parciales en `import_jobs`**: inserción de líneas + paso a `completed` en una única transacción; cualquier excepción hace rollback y marca `failed` con `error_message` legible, conservando el archivo. Ningún consumidor lee cabeceras que no estén `completed`/`active`.
 4. **Concurrencia en `purchase_run_lines`**: edición vía RPC `security definer` (`update_final_quantity`) que compara `row_version` — 0 filas afectadas ⇒ conflicto explícito, nunca last-write-wins silencioso. El mismo RPC inserta el `purchase_line_adjustments` e incrementa `row_version`, en la misma transacción.
@@ -301,11 +304,15 @@ Contraste AA con la paleta corregida de §10.1; foco visible (`focus-visible` + 
 
 Rutas de servidor Next.js (Route Handlers) o función Python, siempre autenticadas, nunca exponiendo `service_role` al navegador. Cuerpo/respuesta exactos se definen al implementar cada fase; este es el contrato de superficie a respetar para no romper dependencias entre compañeros.
 
-| Método y ruta | Fase | Propósito | Notas |
-| --- | --- | --- | --- |
-| `POST /api/imports` | 2 | Solicitar URL firmada de subida + crear `files`/`import_jobs` en `pending` | body: `type`, `supplier_id?`, `filename`, `sha256` |
-| `POST /api/imports/:id/process` | 2 | Disparar el parseo server-side (o lo dispara un trigger/queue) | Transaccional; termina en `completed` o `failed`, nunca deja datos parciales vigentes |
-| `GET /api/imports/:id` | 2 | Estado, período detectado, conteos, incidencias | — |
+**Implementado en Fase 2** (superficie final, ya no borrador — corrige la fila de `POST /api/imports` original: `sha256` nunca lo manda el cliente, y crear `files` antes de subir es imposible porque `sha256`/`size_bytes` son `not null` en el esquema):
+
+| Método y ruta | Propósito | Notas |
+| --- | --- | --- |
+| `POST /api/imports/upload-url` | Pide una URL de subida firmada al bucket `source-files`. **No** crea filas todavía. | body: `{type, supplierId?, filename}` → `{bucket, objectPath, token}`. Requiere `can_write()`. |
+| `POST /api/imports` | El archivo YA está en Storage (subido con el token anterior vía `supabase.storage.from(bucket).uploadToSignedUrl`). Descarga el objeto con el cliente del propio usuario, calcula `sha256`/`size_bytes` **en servidor**, inserta `files`+`import_jobs` (`pending`), y dispara el procesamiento. | body: `{objectPath, type, supplierId?, originalName, mimeType?}` → `{job, processingTriggered, processingError}`. Si la función de proceso no responde, el job queda creado en `pending` — no se inventa un éxito. |
+| `GET /api/imports` | Lista de `import_jobs` (50 más recientes), con nombre de proveedor ya resuelto por join. Sin incidencias (costaría una consulta por fila). | DTO `ImportJobRow` camelCase, acordado con `import-ui`. |
+| `GET /api/imports/:id` | Un `import_job` con sus `import_issues`. | Se pide bajo demanda al seleccionar una fila en la UI. |
+| `POST /api/imports_process` | **Función Python separada** (`api/imports_process.py`, no Next.js — Vercel la expone por convivir bajo `/api`), invocada server-a-server por `POST /api/imports` con un secreto compartido (`INTERNAL_API_SECRET`). Conecta con `service_role`/psycopg, descarga el archivo de Storage con la clave de servicio, y llama a `engine.pipeline.run_import_job`. | **No verificado contra un despliegue real de Vercel** (§14) — la interfaz (`class handler(BaseHTTPRequestHandler)`) es la documentada por Vercel, pero su primera ejecución real conviene tratarla como un smoke test. |
 | `POST /api/purchase-runs` | 3 | Crear corrida (proveedor, `sales_import_id`, `price_list_id`, `inventory_snapshot_id?`, días objetivo por ubicación) | Motor Python calcula `purchase_run_lines` en la misma operación o async con `status=calculated` al terminar |
 | `GET /api/purchase-runs/:id/lines` | 3 | Listado filtrable/paginado de líneas | — |
 | `POST /api/purchase-runs/:id/lines/:lineId/adjust` (RPC `update_final_quantity`) | 3 | Ajustar cantidad final con control de concurrencia | body: `new_quantity`, `expected_row_version`, `reason?`; 409 si la versión no coincide |
@@ -354,7 +361,47 @@ Nadie ha iniciado sesión todavía contra un backend real — es trabajo humano,
 ### Riesgos abiertos que quedan para cuando exista esa instancia real
 
 - El trigger `on_auth_user_created` sobre `auth.users` se creó y probó como superusuario en el contenedor efímero; en Supabase hosted corre como `postgres`, que debería tener permiso, pero es el punto con más probabilidad de fallar si el proyecto tiene alguna restricción particular.
-- Las políticas RLS asumen que el rol `authenticated` tiene `GRANT` por defecto sobre las tablas nuevas de `public` (comportamiento estándar de Supabase, confirmado en la imagen oficial de Docker).
+- Las políticas RLS asumían que el rol `authenticated` tiene `GRANT` por defecto sobre las tablas nuevas de `public` — **falso en este proyecto**, confirmado y corregido en Fase 2 con `0006`/`0012` (ver §15).
 - `src/types/profile.ts` es un tipo TypeScript escrito a mano; reemplazar por `supabase gen types` en cuanto exista el proyecto — hoy una columna renombrada rompe en runtime, no en compilación.
-- `0015_storage_buckets.sql` (los 3 buckets privados) no se implementó todavía — no estaba en el alcance de `db-auth` para Fase 1; queda para cuando `imports-ui`/`order-domain` lo necesiten (Fase 2/4).
+- `0011_storage_buckets.sql` ya se implementó en Fase 2 (`data-model`) — ver §15 para su estado y riesgos de aplicación contra el proyecto real (el esquema `storage` no existe en una base Postgres pelada, lo crea el servicio Storage).
 - CI aún no existe: decidir si `xlwt` (dependencia de solo-pruebas de `engine-core`) se instala en el pipeline, o si las 6 pruebas del lector `.xls` quedan como `skipped` ahí.
+
+---
+
+## 15. Estado de Fase 2 (catálogo e importaciones) — completada por el equipo
+
+`data-model`, `import-backend` e `import-ui` entregaron y el lead integró y verificó de forma independiente (`npm run lint`, `npm run typecheck`, `npm test`, `npm run build`, `python3 -m pytest tests/python`, más el suite de migraciones `supabase/tests/run_migration_tests.sh`). Resumen:
+
+- **`data-model`**: `supabase/migrations/0007..0011` (`import_jobs`/`import_issues`, `price_lists`/`price_list_items` con el trigger de inmutabilidad corregido de §9.1, `sales_imports`/`sales_lines`, `inventory_snapshots`/`inventory_lines`, 3 buckets de Storage) + `supabase/seed.sql` con datos de Fase 2 + `supabase/tests/` (comando único `./supabase/tests/run_migration_tests.sh`, 126 asertos). Encontró y corrigió tres desviaciones reales del contrato original (documentadas en §6.2/§6.3/§9.1) verificando contra un contenedor Postgres efímero, nunca contra el proyecto real.
+- **`import-backend`**: `engine/imports.py` (orquestación pura: `prepare_sales_import`/`prepare_inventory_import`/`prepare_price_list_import`) y `engine/persistence.py` (`persist_import`/`mark_failed`, transaccional, DB-API 2.0 puro sin dependencia de driver). 71 pruebas nuevas con fixtures sintéticas. Corrigió un bug real del motor viejo en el parseo numérico es-CO (ver §3.4).
+- **`import-ui`**: pantalla `/imports` completa (selector de tipo, `FileDropzone` con validación de extensión/tamaño en cliente, tabla de trabajos, panel de incidencias agrupadas con mensaje accionable por código, componentes transversales `StatusBadge`/`EmptyState`). 62 pruebas nuevas de lógica pura. Instaló las primitives de shadcn `table`/`badge`/`progress`/`alert`/`select` (aditivo, sin cambios de versión).
+- **Lead (integración)**: además de las tareas de siempre (revisión, verificación independiente, contrato, commits), esta fase requirió escribir la superficie de API real:
+  - `engine/pipeline.py` (`run_import_job`): ata `engine.readers` + `engine.imports` + `engine.persistence` a un `import_job` concreto — descarga de Storage, `sha256`/`size_bytes` en servidor, lectura/preparación según tipo, persistencia. 10 pruebas nuevas con dobles en memoria.
+  - `0012_harden_fase1_grants.sql`: mismo endurecimiento de privilegios (`revoke` + `grant` explícito a `authenticated` **y** `service_role`) que `data-model` ya aplicó en 0007-0011, extendido a las 6 tablas de Fase 1 (0002-0005) a partir de un hallazgo real de `data-model` (la imagen de Supabase concede privilegios de sobra por `alter default privileges`). 13 pruebas nuevas (`supabase/tests/sql/70_fase1_hardening.sql`).
+  - `src/app/api/imports/upload-url/route.ts`, `src/app/api/imports/route.ts` (POST/GET), `src/app/api/imports/[id]/route.ts`, `src/lib/api/auth.ts`, `src/lib/supabase/relations.ts`.
+  - `api/imports_process.py` + `api/requirements.txt`: la función Python de Vercel que conecta con `service_role`/psycopg y llama a `engine.pipeline.run_import_job`. Es la única pieza de todo `engine/`+`api/` que abre una conexión real y lee credenciales — a propósito, para que el resto siga siendo puro y testeable sin infraestructura.
+  - `src/app/(app)/imports/imports-page-client.tsx`: conecta `onUpload` (sube en 2 pasos: `upload-url` → `uploadToSignedUrl` → `POST /api/imports`) e incidencias bajo demanda al seleccionar un job.
+
+### Corrección de diseño encontrada durante la integración
+
+El borrador de API de §11 (heredado de Fase 0) asumía que `POST /api/imports` crea `files`+`import_jobs` **antes** de subir el archivo, con el cliente mandando el `sha256`. Es imposible: `files.sha256`/`files.size_bytes` son `not null` en el esquema (`0005_files.sql`), y de todas formas el contrato mismo prohíbe confiar en un hash que mande el cliente. La superficie real quedó en dos pasos — `POST /api/imports/upload-url` (antes de subir, sin tocar la base) y `POST /api/imports` (después de subir, con el hash calculado en servidor) — documentados en §11.
+
+### Acciones manuales pendientes en Supabase (ninguna se ejecutó contra el proyecto real)
+
+1. Aplicar `supabase/migrations/0007` a `0012`, en orden, sobre el proyecto real (`0001`-`0006` deberían seguir aplicadas de Fase 1).
+2. Si `0011_storage_buckets.sql` falla con `permission denied for schema storage` o similar (riesgo documentado dentro del propio archivo: el esquema `storage` pertenece a `supabase_storage_admin`): crear los 3 buckets (`source-files`, `purchase-order-pdfs`, `exports`, los tres privados) desde el panel de Supabase, y aplicar solo la parte de políticas de `0011` por separado.
+3. Configurar en el entorno de servidor (Vercel, nunca en Git): `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_DB_URL` (cadena de conexión Postgres, para `psycopg`, no la URL HTTP), `INTERNAL_API_SECRET` (un valor propio, ej. `openssl rand -hex 32`). Los tres ya están documentados con nombre vacío en `.env.example`.
+4. Confirmar que Vercel está conectado al repositorio y que despliega `api/imports_process.py` como función Python (plan §11/contrato §4) — no confirmado en esta fase. Si Vercel no reconoce automáticamente el archivo, hace falta configurar `vercel.json` (`functions`) apuntando a `api/imports_process.py` con `runtime: "python3.12"` o el que corresponda al momento del despliegue.
+5. Primer smoke test real: subir un `SDOSXSUC.CSV` sintético pequeño desde `/imports` con una cuenta `buyer`/`admin` real, y confirmar que el `import_job` termina en `completed` con líneas en `inventory_lines`. Es el único paso de esta fase que nadie pudo ejercitar de punta a punta.
+
+### Lo que queda sin verificar (todo, hasta que exista esa instancia real)
+
+- Todo lo de §14 que seguía sin verificar (RLS con JWT reales, `bypassrls` de `service_role`, ownership de `storage` en el proyecto hosted) sigue igual de sin verificar en Fase 2.
+- La convención de `class handler(BaseHTTPRequestHandler)` de `api/imports_process.py` es la documentada por Vercel para funciones Python, pero nunca se desplegó — su primera ejecución real es, en la práctica, la prueba de integración pendiente.
+- `engine/pipeline.py` nunca corrió contra un Postgres real (solo dobles en memoria); la pasada conjunta que se había previsto contra el contenedor efímero de `data-model` no llegó a hacerse por tiempo — queda como primer paso recomendado antes del smoke test real.
+
+### Decisiones que quedaron explícitamente fuera de alcance de esta fase
+
+- **Modo Feria**: `engine/pipeline.py` acepta `fair_mode` como parámetro, pero ninguna UI lo expone todavía (no hay selector en `/imports`) — usa `False` por defecto. Sigue siendo la decisión pendiente adicional que señaló `domain-auditor` en Fase 0 (§2).
+- Ventas de INVEPTOS acotadas a un `supplier_id` específico: soportado en `engine/pipeline.py` (resuelve `tbc_code`), pero sin fixture de prueba con archivo real — es el caso raro que el contrato §9 ya marcaba como infrecuente (INVEPTOS casi siempre es global).
+- No se abrió la Fase 3 (compras sugeridas): ni `engine/recommendation.py`, ni `purchase_runs`/`purchase_run_lines`, ni la ruta `/purchase-runs/[id]`. Las migraciones planificadas para Fase 3 siguen en `0013` en adelante (§6.2).
