@@ -8,6 +8,12 @@ Módulos:
       período inclusivo bloqueante, números es-CO, registro de incidencias).
     - ``engine.readers``: lectura de las tres fuentes (SDOSXSUC, INVEPTOS,
       lista de precios de proveedor).
+    - ``engine.imports``: orquestación de una importación (validación fila por
+      fila y mapeo a las columnas de `sales_*`/`inventory_*`/`price_list*`).
+      No toca base de datos.
+    - ``engine.persistence``: escritura transaccional de una importación
+      preparada, sobre una conexión DB-API **inyectada**. El paquete nunca
+      abre conexiones ni lee credenciales.
     - ``engine.recommendation``: pendiente de Fase 3 del runbook.
 
 Reglas invariantes del dominio (contrato §5.1):

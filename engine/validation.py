@@ -87,6 +87,12 @@ class IssueCode:
     TISUC_DESCONOCIDO = "tisuc_desconocido"
     COLUMNA_FALTANTE = "columna_faltante"
     TOTAL_INCONSISTENTE = "total_inconsistente"
+    #: Cantidad no utilizable (inventario negativo). El contrato §6.3 no lo
+    #: enumera porque el caso apareció al orquestar la importación de
+    #: SDOSXSUC: `inventory_lines.on_hand` tiene `check (>= 0)`, así que una
+    #: existencia negativa no se puede guardar y tampoco se recorta a 0
+    #: (sería inventar un dato). Se excluye esa existencia y se registra aquí.
+    CANTIDAD_INVALIDA = "cantidad_invalida"
 
 
 #: Fuentes válidas para el campo `source` de una incidencia.
