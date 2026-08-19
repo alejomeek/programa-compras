@@ -11,6 +11,8 @@ un `import_job` en `pending` sin rastro cuando hay conexión disponible.
 
 from __future__ import annotations
 
+import email.message
+import io
 import logging
 from typing import Any
 
@@ -215,3 +217,98 @@ def test_fallo_de_negocio_ya_manejado_por_pipeline_da_422_y_no_marca_failed_de_n
     assert body["errorMessage"] == "Columnas faltantes."
     assert conn.closed
     assert any("Columnas faltantes" in record.getMessage() for record in caplog.records)
+
+
+# --------------------------------------------------------------------------- #
+# `handler.do_POST` — el 401 real (autenticación entre servidores)
+# --------------------------------------------------------------------------- #
+#
+# `BaseHTTPRequestHandler.__init__` intenta atender la petición de inmediato
+# sobre un socket real; para probar `do_POST` en aislamiento se construye la
+# instancia sin pasar por `__init__` (`__new__`) y se le da lo mínimo que usa:
+# `headers` (case-insensitive, como el `http.client.HTTPMessage` real) y
+# `rfile`. `_json` se reemplaza para capturar la respuesta sin tocar sockets.
+
+
+def _make_handler(*, headers: dict[str, str], body: bytes = b"") -> Any:
+    instance = imports_process.handler.__new__(imports_process.handler)
+    message = email.message.Message()
+    for name, value in headers.items():
+        message[name] = value
+    instance.headers = message
+    instance.rfile = io.BytesIO(body)
+    instance._responses: list[tuple[int, dict]] = []
+    instance._json = lambda status, resp_body: instance._responses.append((status, resp_body))
+    return instance
+
+
+def test_do_post_401_sin_internal_api_secret_configurado(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.delenv("INTERNAL_API_SECRET", raising=False)
+    instance = _make_handler(headers={"x-internal-secret": "lo-que-sea"})
+
+    with caplog.at_level(logging.WARNING, logger="imports_process"):
+        instance.do_POST()
+
+    assert instance._responses == [(401, {"error": "No autorizado."})]
+    [record] = [r for r in caplog.records if "401" in r.getMessage()]
+    assert "configurado=False" in record.getMessage()
+    assert "presente=True" in record.getMessage()
+    # Nunca se loguea el valor real de ningún secreto.
+    assert "lo-que-sea" not in caplog.text
+
+
+def test_do_post_401_con_secret_configurado_y_header_ausente(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setenv("INTERNAL_API_SECRET", "el-secreto-real")
+    instance = _make_handler(headers={})  # nada de x-internal-secret
+
+    with caplog.at_level(logging.WARNING, logger="imports_process"):
+        instance.do_POST()
+
+    assert instance._responses == [(401, {"error": "No autorizado."})]
+    [record] = [r for r in caplog.records if "401" in r.getMessage()]
+    assert "configurado=True" in record.getMessage()
+    assert "presente=False" in record.getMessage()
+    assert "el-secreto-real" not in caplog.text
+
+
+def test_do_post_401_con_secret_configurado_y_header_incorrecto(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setenv("INTERNAL_API_SECRET", "el-secreto-real")
+    instance = _make_handler(headers={"x-internal-secret": "otro-valor"})
+
+    with caplog.at_level(logging.WARNING, logger="imports_process"):
+        instance.do_POST()
+
+    assert instance._responses == [(401, {"error": "No autorizado."})]
+    [record] = [r for r in caplog.records if "401" in r.getMessage()]
+    assert "configurado=True" in record.getMessage()
+    assert "presente=True" in record.getMessage()  # llegó, pero no coincide
+    assert "el-secreto-real" not in caplog.text
+    assert "otro-valor" not in caplog.text
+
+
+def test_do_post_secret_correcto_no_loguea_401_y_llega_a_process(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setenv("INTERNAL_API_SECRET", "el-secreto-real")
+    instance = _make_handler(
+        headers={
+            "x-internal-secret": "el-secreto-real",
+            "content-length": str(len(b'{"jobId": "job-1"}')),
+        },
+        body=b'{"jobId": "job-1"}',
+    )
+    monkeypatch.setattr(
+        imports_process, "_process", lambda job_id, **kwargs: (200, {"importJobId": job_id})
+    )
+
+    with caplog.at_level(logging.WARNING, logger="imports_process"):
+        instance.do_POST()
+
+    assert instance._responses == [(200, {"importJobId": "job-1"})]
+    assert not any("401" in record.getMessage() for record in caplog.records)

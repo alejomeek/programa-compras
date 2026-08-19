@@ -218,7 +218,20 @@ def _process(
 class handler(BaseHTTPRequestHandler):  # noqa: N801 - nombre exigido por Vercel
     def do_POST(self) -> None:  # noqa: N802 - firma exigida por BaseHTTPRequestHandler
         secret = os.environ.get("INTERNAL_API_SECRET")
-        if not secret or self.headers.get("x-internal-secret") != secret:
+        header_value = self.headers.get("x-internal-secret")
+        if not secret or header_value != secret:
+            # Nunca se loguea `secret` ni `header_value`: solo si cada uno
+            # existe, que es justo lo que hace falta para distinguir "nadie
+            # configuró INTERNAL_API_SECRET en este entorno" de "algo entre
+            # el llamador y esta función no está mandando (o está alterando)
+            # el header" — por ejemplo, un 401 de la propia protección de
+            # despliegue de Vercel nunca llega a ejecutar esta línea.
+            logger.warning(
+                "401 No autorizado: INTERNAL_API_SECRET configurado=%s, "
+                "header x-internal-secret presente=%s",
+                bool(secret),
+                header_value is not None,
+            )
             self._json(401, {"error": "No autorizado."})
             return
 

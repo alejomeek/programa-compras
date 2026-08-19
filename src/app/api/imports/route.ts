@@ -7,6 +7,7 @@ import type { ImportJobRow } from "@/app/(app)/imports/types";
 import { requireWriter } from "@/lib/api/auth";
 import { createClient } from "@/lib/supabase/server";
 import { embeddedOne } from "@/lib/supabase/relations";
+import { processingRequestInit } from "./processing-request";
 
 export const dynamic = "force-dynamic";
 
@@ -247,8 +248,11 @@ async function triggerProcessing(
   request: NextRequest,
   jobId: string,
 ): Promise<{ triggered: boolean; message?: string }> {
-  const secret = process.env.INTERNAL_API_SECRET;
-  if (!secret) {
+  const init = processingRequestInit(jobId, {
+    internalApiSecret: process.env.INTERNAL_API_SECRET,
+    automationBypassSecret: process.env.VERCEL_AUTOMATION_BYPASS_SECRET,
+  });
+  if (!init) {
     return {
       triggered: false,
       message:
@@ -257,14 +261,7 @@ async function triggerProcessing(
     };
   }
   try {
-    const response = await fetch(new URL("/api/imports_process", request.nextUrl.origin), {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-internal-secret": secret,
-      },
-      body: JSON.stringify({ jobId }),
-    });
+    const response = await fetch(new URL("/api/imports_process", request.nextUrl.origin), init);
     if (!response.ok) {
       return {
         triggered: false,
