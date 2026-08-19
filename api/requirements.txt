@@ -1,0 +1,11 @@
+# Dependencias de la función Python de Vercel api/imports_process.py.
+# Independiente de requirements.txt de la raíz (MVP Streamlit, no se toca) y
+# de engine/requirements.txt (que además declara xlwt, solo de pruebas).
+#
+# psycopg es la elección del lead al conectar esta ruta (import-backend dejó
+# la conexión inyectada y sin driver fijo a propósito, ver engine/persistence.py).
+
+pandas>=2.0
+xlrd>=2.0
+openpyxl>=3.1
+psycopg[binary]>=3.1
