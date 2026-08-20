@@ -68,16 +68,12 @@ def run_import_job(
     *,
     conn: Any,
     storage: StorageDownloader,
-    fair_mode: bool = False,
     effective_date: date | None = None,
 ) -> PersistResult:
     """Procesa un `import_job` de punta a punta: descarga, lee, prepara, guarda.
 
-    ``fair_mode`` y ``effective_date`` son parámetros de la corrida, no del
-    archivo: quien llama los conoce (formulario de carga), `engine/` no los
-    adivina. ``fair_mode`` por defecto es ``False`` porque Modo Feria sigue
-    siendo una decisión de negocio pendiente (contrato §2) — mientras no se
-    confirme, ninguna importación asume que está activo.
+    ``effective_date`` es un parámetro de la corrida, no del archivo: quien
+    llama lo conoce (formulario de carga), `engine/` no lo adivina.
 
     Cualquier fallo ANTES de que exista un `PreparedImport` (archivo
     inaccesible, columnas faltantes, período inválido) se traduce aquí a
@@ -91,9 +87,7 @@ def run_import_job(
     try:
         raw = storage.download(bucket=context.bucket, object_path=context.object_path)
         _record_file_metadata(conn, context.file_id, raw)
-        prepared = _prepare(
-            conn, context, raw, fair_mode=fair_mode, effective_date=effective_date
-        )
+        prepared = _prepare(conn, context, raw, effective_date=effective_date)
     except Exception as exc:  # noqa: BLE001 - se traduce a `failed`, no se traga
         message = readable_error(exc)
         mark_failed(
@@ -180,7 +174,6 @@ def _prepare(
     context: ImportJobContext,
     raw: bytes,
     *,
-    fair_mode: bool,
     effective_date: date | None,
 ):
     buffer = BytesIO(raw)
@@ -196,7 +189,7 @@ def _prepare(
 
     if context.job_type == ImportType.SDOS_INVENTORY:
         frame = read_sdos(buffer)
-        return prepare_inventory_import(frame, fair_mode=fair_mode)
+        return prepare_inventory_import(frame)
 
     if context.job_type == ImportType.SUPPLIER_PRICE_LIST:
         if context.supplier_id is None:

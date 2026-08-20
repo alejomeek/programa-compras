@@ -33,7 +33,6 @@ from engine.readers import (
     DEFAULT_SUPPLIER_COLUMNS,
     NORMALIZED_TEMPLATE_COLUMNS,
     SDOS_INVENTORY_MAPPING,
-    SDOS_INVENTORY_MAPPING_FAIR,
     AliasSpec,
     SupplierColumnMapping,
     discover_tisuc_suffixes,
@@ -149,8 +148,8 @@ def test_columna_us_ausente_significa_inventario_cero_no_error():
 
 
 def test_columnas_us_no_mapeadas_se_ignoran():
-    """``us07`` (sin uso) y ``us10..us30`` no producen ubicación."""
-    mapeo = sdos_inventory_columns(["us01", "us07", "us10", "us30"])
+    """``us07``/``us09`` (sin uso) y ``us10..us30`` no producen ubicación."""
+    mapeo = sdos_inventory_columns(["us01", "us07", "us09", "us10", "us30"])
     assert mapeo == {"us01": "Av. 19"}
 
 
@@ -158,23 +157,18 @@ def test_columnas_us_se_detectan_sin_distinguir_mayusculas():
     assert sdos_inventory_columns(["US01", "Us02"]) == {"US01": "Av. 19", "Us02": "Bulevar"}
 
 
-def test_modo_feria_solo_cambia_el_mapeo_de_columnas():
-    """Modo Feria es metadato de la importación, no un parámetro de cálculo.
-
-    Lo único que cambia es a qué ubicación apunta cada columna del archivo;
-    ninguna de las dos variantes altera un cálculo, porque el inventario nunca
-    entra a la fórmula (contrato §5.1).
-    """
+def test_feria_y_bodega_bqlla_se_retiraron_del_mapeo():
+    """Modo Feria y Bodega Bqlla se retiraron del modelo (contrato §2): ``us05``
+    siempre es Oviedo y ``us09`` ya no mapea a ninguna ubicación."""
     columnas = [f"us0{n}" for n in range(1, 10)]
-    normal = sdos_inventory_columns(columnas, fair_mode=False)
-    feria = sdos_inventory_columns(columnas, fair_mode=True)
+    mapeo = sdos_inventory_columns(columnas)
 
-    assert normal["us05"] == "Oviedo"
-    assert feria["us05"] == "Feria"
-    assert feria["us07"] == "CEDI"
-    assert "us07" not in normal  # sin uso en operación normal
-    assert set(normal.values()) <= set(SDOS_INVENTORY_MAPPING.values())
-    assert set(feria.values()) <= set(SDOS_INVENTORY_MAPPING_FAIR.values())
+    assert mapeo["us05"] == "Oviedo"
+    assert "us07" not in mapeo
+    assert "us09" not in mapeo
+    assert "Feria" not in mapeo.values()
+    assert "Bodega Bqlla" not in mapeo.values()
+    assert set(mapeo.values()) <= set(SDOS_INVENTORY_MAPPING.values())
 
 
 # =========================================================================== #
@@ -271,11 +265,9 @@ def test_tisuc_se_lee_del_archivo_real_generado():
         ("10010", "Bulevar"),
         ("10500", "Calle 74"),
         ("10510", "Bvista"),
-        ("10600", "Feria"),
         ("10800", "Oviedo"),
         ("20010", "CEDI"),
         ("20020", "Full MercadoLibre"),
-        ("20030", "Bodega Bqlla"),
     ],
 )
 def test_catalogo_completo_de_tisuc(codigo, ubicacion):
@@ -296,6 +288,16 @@ def test_tisuc_desconocido_genera_incidencia_no_descarte_silencioso():
     assert incidencia.source == "INVEPTOS"
     assert incidencia.row_number == 4
     assert "99999" in incidencia.detail
+
+
+@pytest.mark.parametrize("codigo", ["10600", "20030"])
+def test_feria_y_bodega_bqlla_ahora_son_tisuc_desconocido(codigo):
+    """Retirados del modelo (contrato §2): un TISUC# que antes mapeaba a Feria
+    o Bodega Bqlla hoy es un código desconocido más, igual que cualquier otro
+    fuera del catálogo — genera incidencia, no se descarta en silencio."""
+    issues = IssueCollector()
+    assert location_for_tisuc(codigo, issues, row_number=1) is None
+    assert len(issues.by_code(IssueCode.TISUC_DESCONOCIDO)) == 1
 
 
 def test_tisuc_vacio_no_es_incidencia():

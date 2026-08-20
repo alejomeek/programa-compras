@@ -15,18 +15,23 @@
 -- ---------------------------------------------------------------------------
 -- Ya las inserta 0003_locations.sql (son catalogo operativo, no dato comercial).
 -- Se reafirman aqui para bases locales creadas por otra via.
+--
+-- FERIA y BODBQLLA se retiraron del modelo (0013_retire_feria_bodega.sql):
+-- nunca se borran filas, asi que siguen naciendo aqui igual que en 0003,
+-- pero ya `active = false` desde el insert -- no hace falta un segundo paso
+-- que las desactive en una base creada solo con este seed.
 insert into public.locations
-  (code, name, tisuc_code, type, is_purchase_target, display_order)
+  (code, name, tisuc_code, type, is_purchase_target, active, display_order)
 values
-  ('AV19',     'Av. 19',            '10000', 'store',       true,  1),
-  ('BULEVAR',  'Bulevar',           '10010', 'store',       true,  2),
-  ('CALLE74',  'Calle 74',          '10500', 'store',       true,  3),
-  ('BVISTA',   'Bvista',            '10510', 'store',       true,  4),
-  ('OVIEDO',   'Oviedo',            '10800', 'store',       true,  5),
-  ('CEDI',     'CEDI',              '20010', 'warehouse',   true,  6),
-  ('FERIA',    'Feria',             '10600', 'fair',        false, 7),
-  ('FULLML',   'Full MercadoLibre', '20020', 'marketplace', false, 8),
-  ('BODBQLLA', 'Bodega Bqlla',      '20030', 'warehouse',   false, 9)
+  ('AV19',     'Av. 19',            '10000', 'store',       true,  true,  1),
+  ('BULEVAR',  'Bulevar',           '10010', 'store',       true,  true,  2),
+  ('CALLE74',  'Calle 74',          '10500', 'store',       true,  true,  3),
+  ('BVISTA',   'Bvista',            '10510', 'store',       true,  true,  4),
+  ('OVIEDO',   'Oviedo',            '10800', 'store',       true,  true,  5),
+  ('CEDI',     'CEDI',              '20010', 'warehouse',   true,  true,  6),
+  ('FERIA',    'Feria',             '10600', 'fair',        false, false, 7),
+  ('FULLML',   'Full MercadoLibre', '20020', 'marketplace', false, true,  8),
+  ('BODBQLLA', 'Bodega Bqlla',      '20030', 'warehouse',   false, false, 9)
 on conflict (code) do nothing;
 
 -- ---------------------------------------------------------------------------

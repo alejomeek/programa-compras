@@ -39,7 +39,6 @@ from engine.validation import (
 __all__ = [
     "TISUC_TO_LOCATION",
     "SDOS_INVENTORY_MAPPING",
-    "SDOS_INVENTORY_MAPPING_FAIR",
     "OPERATIVE_LOCATIONS",
     "REFERENCE_LOCATIONS",
     "ALL_LOCATIONS",
@@ -73,16 +72,22 @@ SOURCE_SUPPLIER = "Proveedor"
 # --------------------------------------------------------------------------- #
 
 #: Código ``TISUC#`` de TBC → nombre de ubicación (espejo de `locations`, §6.3).
+#:
+#: ``Feria`` (10600) y ``Bodega Bqlla`` (20030) se retiraron del modelo:
+#: decisión de negocio (contrato §2) tras confirmar que, sin redistribución,
+#: no tenían ningún efecto operativo. Sus filas en `locations` quedan
+#: `active = false` (nunca se borran, ver 0003_locations.sql), y un
+#: `TISUC#` 10600/20030 en un archivo real ahora es un código desconocido
+#: como cualquier otro: genera incidencia `tisuc_desconocido`
+#: (`location_for_tisuc`), no se descarta en silencio.
 TISUC_TO_LOCATION: dict[str, str] = {
     "10000": "Av. 19",
     "10010": "Bulevar",
     "10500": "Calle 74",
     "10510": "Bvista",
-    "10600": "Feria",
     "10800": "Oviedo",
     "20010": "CEDI",
     "20020": "Full MercadoLibre",
-    "20030": "Bodega Bqlla",
 }
 
 #: Ubicaciones que pueden recibir una compra (`is_purchase_target`).
@@ -96,17 +101,20 @@ OPERATIVE_LOCATIONS: tuple[str, ...] = (
 )
 
 #: Ubicaciones que existen en los archivos pero no son destino de compra.
-#: Feria y Bodega Bqlla quedaron sin efecto operativo al eliminar la
-#: redistribución; se conservan como metadato de la importación (pendiente
-#: de confirmación de negocio, contrato §2).
-REFERENCE_LOCATIONS: tuple[str, ...] = ("Full MercadoLibre", "Feria", "Bodega Bqlla")
+REFERENCE_LOCATIONS: tuple[str, ...] = ("Full MercadoLibre",)
 
 ALL_LOCATIONS: tuple[str, ...] = OPERATIVE_LOCATIONS + REFERENCE_LOCATIONS
 
-#: ``us01..us09`` → ubicación, operación normal. ``us07`` no se usa.
-#: ``us10..us30`` existen en el archivo real y **no** están mapeadas
-#: (comportamiento heredado; su descarte es intencional hasta que negocio
-#: diga lo contrario — contrato §3.1).
+#: ``us01..us09`` → ubicación. ``us07`` y ``us09`` no se usan: ``us09`` era
+#: Bodega Bqlla, retirada del modelo (ver `TISUC_TO_LOCATION`); ``us07``
+#: nunca estuvo mapeada. ``us10..us30`` existen en el archivo real y **no**
+#: están mapeadas (comportamiento heredado; su descarte es intencional hasta
+#: que negocio diga lo contrario — contrato §3.1).
+#:
+#: Ya no depende de Modo Feria: el mapeo `us05 → Feria` (variante "Modo
+#: Feria" del archivo) se retiró junto con la ubicación — un archivo
+#: exportado en Modo Feria hoy simplemente no aporta ninguna cifra a esa
+#: columna, igual que cualquier otra columna sin ubicación vigente.
 SDOS_INVENTORY_MAPPING: dict[str, str] = {
     "us01": "Av. 19",
     "us02": "Bulevar",
@@ -115,22 +123,6 @@ SDOS_INVENTORY_MAPPING: dict[str, str] = {
     "us05": "Oviedo",
     "us06": "CEDI",
     "us08": "Full MercadoLibre",
-    "us09": "Bodega Bqlla",
-}
-
-#: Mismo mapeo cuando la exportación se tomó en Modo Feria. **No es un
-#: parámetro de cálculo** (contrato §5.1): describe cómo estaba armado el
-#: archivo, nada más. El inventario es referencia y nunca entra a la fórmula.
-SDOS_INVENTORY_MAPPING_FAIR: dict[str, str] = {
-    "us01": "Av. 19",
-    "us02": "Bulevar",
-    "us03": "Calle 74",
-    "us04": "Bvista",
-    "us05": "Feria",
-    "us06": "Oviedo",
-    "us07": "CEDI",
-    "us08": "Full MercadoLibre",
-    "us09": "Bodega Bqlla",
 }
 
 #: Columnas sin las que SDOSXSUC no es utilizable.
@@ -152,15 +144,12 @@ INVEPTOS_REQUIRED_COLUMNS: tuple[str, ...] = (
 _TISUC_RE = re.compile(r"^TISUC(\d+)$", re.IGNORECASE)
 
 
-def sdos_inventory_mapping(fair_mode: bool = False) -> dict[str, str]:
-    """Mapeo ``us##`` → ubicación para esta exportación de SDOSXSUC."""
-    return dict(SDOS_INVENTORY_MAPPING_FAIR if fair_mode else SDOS_INVENTORY_MAPPING)
+def sdos_inventory_mapping() -> dict[str, str]:
+    """Mapeo ``us##`` → ubicación para SDOSXSUC."""
+    return dict(SDOS_INVENTORY_MAPPING)
 
 
-def sdos_inventory_columns(
-    columns: Sequence[Any],
-    fair_mode: bool = False,
-) -> dict[str, str]:
+def sdos_inventory_columns(columns: Sequence[Any]) -> dict[str, str]:
     """Columnas ``us##`` **presentes** en el archivo → ubicación.
 
     Una columna ausente simplemente no aparece en el resultado: el llamador
@@ -169,7 +158,7 @@ def sdos_inventory_columns(
     entre ``us01`` y ``US01``.
     """
     present = {str(c).strip().lower(): str(c).strip() for c in columns}
-    mapping = sdos_inventory_mapping(fair_mode)
+    mapping = sdos_inventory_mapping()
     return {
         present[key]: location
         for key, location in mapping.items()

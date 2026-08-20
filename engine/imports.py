@@ -512,14 +512,9 @@ def prepare_inventory_import(
     frame: pd.DataFrame,
     *,
     snapshot_date: date | None = None,
-    fair_mode: bool = False,
     issues: IssueCollector | None = None,
 ) -> PreparedImport:
     """Prepara un snapshot de inventario a partir de ``read_sdos``.
-
-    ``fair_mode`` es **metadato de la importación**, no un parámetro de cálculo
-    (contrato §5.1): describe con qué mapeo ``us##`` → ubicación se armó el
-    archivo. El inventario nunca entra a la fórmula de compra.
 
     Una columna ``us##`` ausente no es error: simplemente no genera líneas para
     esa ubicación (contrato §3.1, "columna ausente ⇒ inventario 0").
@@ -527,7 +522,7 @@ def prepare_inventory_import(
     collector = issues or IssueCollector()
     columns = _Columns(frame)
     rows = _rows(frame)
-    inventory_columns = sdos_inventory_columns(columns.names, fair_mode)
+    inventory_columns = sdos_inventory_columns(columns.names)
 
     if not inventory_columns:
         collector.add(
@@ -545,7 +540,6 @@ def prepare_inventory_import(
         source=SOURCE_SDOS,
         header={
             "snapshot_date": snapshot_date or date.today(),
-            "fair_mode": bool(fair_mode),
             "status": "active",
         },
         rows_total=len(rows),

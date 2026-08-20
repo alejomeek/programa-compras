@@ -18,6 +18,9 @@
 # vercel
 .vercel
 
+# supabase CLI (cache local, no config de proyecto)
+supabase/.temp/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
