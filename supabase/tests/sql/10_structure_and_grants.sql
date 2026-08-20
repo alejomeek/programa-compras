@@ -82,6 +82,42 @@ select test.expect_fail('A16 codigo de incidencia con formato invalido rechazado
   $$insert into public.import_issues (import_job_id, severity, code, detail)
     values ('dddd0000-0000-0000-0000-000000000001','error','EAN Invalido!','x')$$);
 
+select test.expect_true('A17 las 4 tablas de Fase 3 (purchase_runs) existen con RLS activa',
+  $$select count(*) = 4 from pg_class c join pg_namespace n on n.oid=c.relnamespace
+    where n.nspname='public' and c.relrowsecurity
+      and c.relname in ('purchase_runs','purchase_run_target_days','purchase_run_lines','purchase_line_adjustments')$$);
+
+select test.expect_true('A18 enum purchase_run_status tiene los 4 estados del contrato',
+  $$select array_agg(e.enumlabel::text order by e.enumsortorder) = array['draft','calculated','locked','cancelled']
+    from pg_enum e join pg_type t on t.oid=e.enumtypid where t.typname='purchase_run_status'$$);
+
+select test.expect_true('A19 enum purchase_run_line_status tiene los 2 estados del contrato',
+  $$select array_agg(e.enumlabel::text order by e.enumsortorder) = array['ok','no_price']
+    from pg_enum e join pg_type t on t.oid=e.enumtypid where t.typname='purchase_run_line_status'$$);
+
+select test.expect_fail('A20 purchase_runs.period_days no es asignable a mano (columna generada)',
+  $$insert into public.purchase_runs
+      (supplier_id, sales_import_id, price_list_id, period_start, period_end, period_days, engine_version, params_hash)
+    values ('aaaaaaaa-0000-0000-0000-000000000001','eeee0000-0000-0000-0000-000000000001',
+            'ffff0000-0000-0000-0000-000000000001','2026-01-01','2026-01-31',999,'3.0.0',repeat('e',64))$$);
+
+-- Cabecera valida, solo para A21 (no interfiere con la fixture propia de
+-- 80_purchase_runs.sql: son transacciones/suites separadas).
+insert into public.purchase_runs
+  (id, supplier_id, sales_import_id, price_list_id, period_start, period_end, engine_version, params_hash)
+values
+  ('11119999-0000-0000-0000-000000000099','aaaaaaaa-0000-0000-0000-000000000001',
+   'eeee0000-0000-0000-0000-000000000001','ffff0000-0000-0000-0000-000000000001',
+   '2026-01-01','2026-01-31','3.0.0',repeat('e',64));
+
+select test.expect_fail('A21 purchase_run_lines.row_version no admite 0 (arranca en 1)',
+  $$insert into public.purchase_run_lines
+      (purchase_run_id, ean, location_id, sales_units, period_days, daily_sales,
+       suggested_quantity, final_quantity, row_version)
+    select '11119999-0000-0000-0000-000000000099', '7700000000011',
+           id, 1, 1, 1.0, 1, 1, 0
+    from public.locations where code = 'CEDI'$$);
+
 -- ============================ B. GRANTS (regresion de 0006) ============================
 select test.expect_true('B01 authenticated: select+insert en import_jobs, sin update/delete',
   $$select has_table_privilege('authenticated','public.import_jobs','select')
@@ -144,6 +180,28 @@ select test.expect_true('B11 anon no tiene ningun privilegio en las 8 tablas',
   $$select not bool_or(has_table_privilege('anon','public.'||t,p))
     from unnest(array['import_jobs','import_issues','price_lists','price_list_items',
                       'sales_imports','sales_lines','inventory_snapshots','inventory_lines']) t,
+         unnest(array['select','insert','update','delete']) p$$);
+
+select test.expect_true('B12 authenticated: las 4 operaciones en purchase_runs',
+  $$select has_table_privilege('authenticated','public.purchase_runs','select')
+       and has_table_privilege('authenticated','public.purchase_runs','insert')
+       and has_table_privilege('authenticated','public.purchase_runs','update')
+       and has_table_privilege('authenticated','public.purchase_runs','delete')$$);
+
+select test.expect_true('B13 authenticated: SOLO select en target_days/lines/adjustments (Fase 3)',
+  $$select bool_and(has_table_privilege('authenticated','public.'||t,'select'))
+       and not bool_or(has_table_privilege('authenticated','public.'||t,'insert'))
+       and not bool_or(has_table_privilege('authenticated','public.'||t,'update'))
+       and not bool_or(has_table_privilege('authenticated','public.'||t,'delete'))
+    from unnest(array['purchase_run_target_days','purchase_run_lines','purchase_line_adjustments']) t$$);
+
+select test.expect_true('B14 service_role puede insertar en las 4 tablas de Fase 3 (el motor las calcula)',
+  $$select bool_and(has_table_privilege('service_role','public.'||t,'insert'))
+    from unnest(array['purchase_runs','purchase_run_target_days','purchase_run_lines','purchase_line_adjustments']) t$$);
+
+select test.expect_true('B15 anon no tiene ningun privilegio en las 4 tablas de Fase 3',
+  $$select not bool_or(has_table_privilege('anon','public.'||t,p))
+    from unnest(array['purchase_runs','purchase_run_target_days','purchase_run_lines','purchase_line_adjustments']) t,
          unnest(array['select','insert','update','delete']) p$$);
 
 rollback;
