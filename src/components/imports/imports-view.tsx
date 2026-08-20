@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { RefreshCw } from "lucide-react";
+import { Download, RefreshCw } from "lucide-react";
 
 import { FileDropzone, type UploadHandler } from "@/components/imports/file-dropzone";
 import { ImportJobsTable } from "@/components/imports/import-jobs-table";
@@ -95,6 +95,22 @@ export function ImportsView({
             supplierId={supplierId}
             onSupplierChange={setSupplierId}
           />
+
+          {type === "supplier_price_list" ? (
+            <p className="text-sm text-muted-foreground">
+              <a
+                href="/templates/lista-precios-plantilla.xlsx"
+                download
+                className="inline-flex items-center gap-1.5 font-medium text-primary underline-offset-4 hover:underline"
+              >
+                <Download aria-hidden="true" className="size-3.5" />
+                Descargar plantilla de lista de precios
+              </a>{" "}
+              — columnas <code className="text-xs">EAN-13</code>,{" "}
+              <code className="text-xs">Nombre</code> y{" "}
+              <code className="text-xs">Costo proveedor</code>, con una fila de ejemplo.
+            </p>
+          ) : null}
 
           <FileDropzone
             type={type}

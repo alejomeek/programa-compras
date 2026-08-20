@@ -40,3 +40,10 @@ __pycache__/
 COT-*.pdf
 
 !.streamlit/
+
+# Plantillas estaticas servidas a los usuarios (sin datos comerciales reales,
+# solo encabezados + una fila de ejemplo sintetica) - excepcion al bloqueo
+# general de *.xlsx de arriba, que existe para no commitear archivos
+# comerciales reales por accidente.
+!public/templates/
+!public/templates/*.xlsx
