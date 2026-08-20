@@ -293,6 +293,20 @@ SYNTHETIC_LOCATION_IDS: dict[str, str] = {
     "Bodega Bqlla": "loc-0009",
 }
 
+#: Catálogo para `engine.recommendation` (query distinta a la de arriba: trae
+#: `code`/`is_purchase_target`, filtra `WHERE active` — Feria/Bodega Bqlla,
+#: retiradas en Fase 2, no aparecen). 6 operativas + Full ML de referencia
+#: (D1: se suma a CEDI en el cálculo, nunca genera fila propia).
+SYNTHETIC_OPERATIVE_LOCATIONS: tuple[tuple[str, str, str, bool], ...] = (
+    ("loc-0001", "AV19", "Av. 19", True),
+    ("loc-0002", "BULEVAR", "Bulevar", True),
+    ("loc-0003", "CALLE74", "Calle 74", True),
+    ("loc-0004", "BVISTA", "Bvista", True),
+    ("loc-0005", "OVIEDO", "Oviedo", True),
+    ("loc-0006", "CEDI", "CEDI", True),
+    ("loc-0008", "FULLML", "Full MercadoLibre", False),
+)
+
 
 class FakeDatabaseError(RuntimeError):
     """Fallo simulado de la base (equivale a un error de psycopg)."""
@@ -338,6 +352,20 @@ class FakeConnection:
         max_version: int | None = None,
         superseded_id: str | None = None,
         fail_on: str | Sequence[str] = (),
+        # -- engine.recommendation: un escenario por prueba, no una tabla de
+        # verdad indexada por id (`_result_for` no ve los parámetros de la
+        # consulta, mismo criterio que `job_status`/`max_version` arriba). --
+        rec_locations: Sequence[tuple[str, str, str, bool]] = SYNTHETIC_OPERATIVE_LOCATIONS,
+        rec_sales_import: tuple[Any, Any, int] | None = None,
+        rec_supplier_exists: bool = True,
+        rec_supplier_tbc_code: str | None = None,
+        rec_price_list_exists: bool = True,
+        rec_price_list_supplier_id: Any = None,
+        rec_inventory_snapshot_exists: bool = True,
+        rec_sales_lines: Sequence[tuple[str, str, int]] = (),
+        rec_inventory_lines: Sequence[tuple[str, str, int, str | None]] = (),
+        rec_price_list_items: Sequence[tuple[str, Any]] = (),
+        rec_products: Sequence[tuple[str, str]] = (),
     ) -> None:
         self.job_status = job_status
         self.locations = (
@@ -348,12 +376,24 @@ class FakeConnection:
         self.fail_on: tuple[str, ...] = (
             (fail_on,) if isinstance(fail_on, str) else tuple(fail_on)
         )
+        self.rec_locations = tuple(rec_locations)
+        self.rec_sales_import = rec_sales_import
+        self.rec_supplier_exists = rec_supplier_exists
+        self.rec_supplier_tbc_code = rec_supplier_tbc_code
+        self.rec_price_list_exists = rec_price_list_exists
+        self.rec_price_list_supplier_id = rec_price_list_supplier_id
+        self.rec_inventory_snapshot_exists = rec_inventory_snapshot_exists
+        self.rec_sales_lines = tuple(rec_sales_lines)
+        self.rec_inventory_lines = tuple(rec_inventory_lines)
+        self.rec_price_list_items = tuple(rec_price_list_items)
+        self.rec_products = tuple(rec_products)
         self.pending: list[tuple[str, Any]] = []
         self.committed: list[tuple[str, Any]] = []
         self.commits = 0
         self.rollbacks = 0
         self.cursors: list[FakeCursor] = []
         self._inserted: dict[str, int] = {}
+        self.closed = False
 
     # -- interfaz DB-API ---------------------------------------------------- #
 
@@ -366,6 +406,9 @@ class FakeConnection:
         self.commits += 1
         self.committed.extend(self.pending)
         self.pending = []
+
+    def close(self) -> None:
+        self.closed = True
 
     def rollback(self) -> None:
         self.rollbacks += 1
@@ -413,4 +456,29 @@ class FakeConnection:
             table = statement.split()[2]
             self._inserted[table] = self._inserted.get(table, 0) + 1
             return [(f"{table}-{self._inserted[table]}",)]
+        # -- engine.recommendation --------------------------------------- #
+        if statement.startswith("SELECT id, code, name, is_purchase_target FROM locations"):
+            return list(self.rec_locations)
+        if statement.startswith("SELECT period_start, period_end, period_days FROM sales_imports"):
+            return [] if self.rec_sales_import is None else [self.rec_sales_import]
+        if statement.startswith("SELECT tbc_code FROM suppliers"):
+            if not self.rec_supplier_exists:
+                return []
+            return [(self.rec_supplier_tbc_code,)]
+        if statement.startswith("SELECT supplier_id FROM price_lists"):
+            if not self.rec_price_list_exists:
+                return []
+            return [(self.rec_price_list_supplier_id,)]
+        if statement.startswith("SELECT 1 FROM inventory_snapshots"):
+            return [(1,)] if self.rec_inventory_snapshot_exists else []
+        if statement.startswith("SELECT ean, supplier_cost FROM price_list_items"):
+            return list(self.rec_price_list_items)
+        if statement.startswith(
+            "SELECT ean, location_id, on_hand, supplier_tbc_code FROM inventory_lines"
+        ):
+            return list(self.rec_inventory_lines)
+        if statement.startswith("SELECT ean, location_id, units_sold FROM sales_lines"):
+            return list(self.rec_sales_lines)
+        if statement.startswith("SELECT id, ean FROM products"):
+            return list(self.rec_products)
         return []
