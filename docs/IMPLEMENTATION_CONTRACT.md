@@ -523,3 +523,13 @@ Los dos stubs de Fase 2 (`page.tsx`, `[id]/page.tsx`, ya en `src/lib/nav.ts`) se
 ### Fuera de alcance de esta fase (para Fase 4)
 
 `purchase_orders`/`purchase_order_items` (D3/D4, sin decisión), numeración y PDF de OC, y "crear borradores de orden desde líneas seleccionadas" (parte del flujo de `/purchase-runs/[id]` en el contrato §7, no implementada — esta fase entrega calcular y ajustar, no emitir).
+
+### Hallazgo post-merge: `/suppliers` nunca tuvo dueño, y bloqueaba probar Fase 3
+
+Al probar Fase 3 en Producción con datos reales, el selector de proveedor de "Compras sugeridas" apareció vacío: no había ningún proveedor activo en la base. Revisando la tabla de propietarios de carpetas (§4), `/suppliers` (CRUD proveedor + versiones de lista de precios, §10.2) **nunca se asignó a ningún agente** — ni `imports-ui` (Fase 2) ni `purchase-ui` (Fase 3) lo tenían en su alcance. Sin una fila en `suppliers`, tampoco puede existir ninguna `price_lists` (`supplier_id not null`), así que este vacío bloqueaba probar de punta a punta tanto Fase 2 como Fase 3 con un proveedor nuevo — no se notó antes porque los proveedores usados hasta ahora entraron a mano por SQL.
+
+**Corregido con el alcance mínimo necesario**, no el CRUD completo del contrato §10.2 (edición y versiones de lista de precios siguen sin construir):
+- `src/app/api/suppliers/route.ts` (nuevo): `GET` lista (cualquier sesión activa, RLS `suppliers_select_authenticated`); `POST` crea (solo `admin`, mismo espejo temprano de `is_admin()` que ya usa `requireWriter()`, delegando la autoridad real a RLS `suppliers_insert_admin`).
+- `src/app/(app)/suppliers/**`, `src/components/suppliers/suppliers-view.tsx` (nuevos): formulario (nombre, comodín TBC de 3 dígitos, NIT opcional) + tabla del catálogo. El formulario no se renderiza para quien no es `admin` (RLS ya lo rechazaría, pero no tiene sentido mostrarlo).
+
+Verificado: `npm run typecheck`/`lint`/`test` limpios; `npm run dev` + `curl` sin sesión contra `/suppliers` y `GET`/`POST /api/suppliers` — 307/401 esperados, confirma que compila y corre.
