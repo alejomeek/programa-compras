@@ -34,7 +34,7 @@ No inventar valores para estas. Los agentes pueden **modelar el esquema de forma
 
 Preguntas adicionales detectadas por `data-architect`, sin sección en el plan pero conviene cerrar antes de Fase 4: ¿quién puede cancelar una OC emitida y con qué motivo obligatorio? ¿retención de `exports` (propuesta: purga a 7 días)? ¿moneda única COP? ¿umbral de delta que obliga a `reason` en un ajuste de cantidad? ¿se migran datos históricos o se arranca con la primera carga oficial?
 
-Pendiente adicional detectado por `domain-auditor`, fuera de §15 pero con impacto en el modelo: sin redistribución, **Bodega Bqlla** y **Modo Feria** quedan sin efecto operativo real (Bodega Bqlla ya no reabastece nada; Modo Feria ya no cambia ningún cálculo porque el inventario no entra a la fórmula). Confirmar con negocio si igual se conservan como metadato de la importación de inventario o se retiran del modelo.
+Pendiente adicional detectado por `domain-auditor`, fuera de §15 pero con impacto en el modelo: sin redistribución, **Bodega Bqlla** y **Modo Feria** quedan sin efecto operativo real (Bodega Bqlla ya no reabastece nada; Modo Feria ya no cambia ningún cálculo porque el inventario no entra a la fórmula). **Cerrado**: confirmado con el usuario que se retiran del modelo (no se conservan como metadato) — ver el cierre completo en §15, "Retiro de Modo Feria y Bodega Bqlla".
 
 ---
 
@@ -57,6 +57,8 @@ Mapeo de inventario por ubicación (`us01..us09`), depende de Modo Feria:
 | us07 | Sin uso | CEDI |
 | us08 | Full MercadoLibre | Full MercadoLibre |
 | us09 | Bodega Bqlla | Bodega Bqlla |
+
+Tabla histórica del formato de origen — sigue siendo verdad sobre lo que trae el archivo, pero **el motor ya no la implementa así**: `Feria` y `Bodega Bqlla` se retiraron del modelo (decisión cerrada en Fase 2, ver §15). Hoy `us05` siempre es Oviedo (sin variante "Modo Feria") y `us09` no mapea a ninguna ubicación.
 
 Columna ausente ⇒ inventario 0, no error.
 
@@ -111,7 +113,7 @@ El **lead** es dueño exclusivo, en todas las fases, de: `package.json`, `packag
 
 ### 5.1 Eliminar (no dejar como código inactivo)
 
-Redistribución interna completa (CEDI/Bodega Bqlla/tiendas) y su priorización de receptores/fuentes; excedentes; resta de inventario contra la sugerencia; mínimos por quiebre y el flujo de "revisión manual / posible quiebre"; la rama especial "ventas 0 + stock > 0 → necesidad 0" (se colapsa: **todo** ventas = 0 → 0); Modo Feria como interruptor de cálculo (si se conserva, es metadato de importación, no parámetro de corrida — pendiente D-adicional); transferencias; el concepto y campo "objetivo de inventario"; el Excel multihoja como mecanismo de edición (fórmulas cruzadas, hoja oculta `_Datos OC`); el marcador literal `"NUEVO"` en celdas.
+Redistribución interna completa (CEDI/tiendas) y su priorización de receptores/fuentes; excedentes; resta de inventario contra la sugerencia; mínimos por quiebre y el flujo de "revisión manual / posible quiebre"; la rama especial "ventas 0 + stock > 0 → necesidad 0" (se colapsa: **todo** ventas = 0 → 0); Modo Feria y Bodega Bqlla — **retirados del modelo en Fase 2** (§15), ya no existen como ubicación ni como parámetro, así que Fase 3 no necesita contemplarlos en absoluto; transferencias; el concepto y campo "objetivo de inventario"; el Excel multihoja como mecanismo de edición (fórmulas cruzadas, hoja oculta `_Datos OC`); el marcador literal `"NUEVO"` en celdas.
 
 ### 5.2 Conservar y portar a `engine/`
 
@@ -119,7 +121,7 @@ Lectura CSV Latin-1 `;` con `dtype=str`; lectura `.xls` legado vía `xlrd` (fija
 
 ### 5.3 Casos borde obligatorios para pruebas (resumen; detalle completo en el informe de `domain-auditor`, sección C)
 
-Ventas = 0 con y sin stock → siempre 0; el stock nunca resta de la sugerencia (prueba de no-regresión explícita, parametrizada sobre varios valores de stock); redondeo hacia arriba estricto; período de 1 día (resultado explosivo, documentar); fecha inválida o invertida → importación bloqueada, nunca `period_days = 1` silencioso; EAN con cero inicial se conserva íntegro; EAN inválido/duplicado excluido del cruce; comodín inválido/inexistente en SDOSXSUC bloquea, inexistente en INVEPTOS solo advierte; producto nuevo sin historia TBC → sugerencia 0, agregable manualmente; Full ML parametrizado por D1; Feria ignorada; Bodega Bqlla sin efecto en el cálculo; código `TISUC#` desconocido genera incidencia (no descarte silencioso); días objetivo por ubicación independientes, con fotografía guardada por corrida; reproducibilidad exacta con mismas fuentes y parámetros.
+Ventas = 0 con y sin stock → siempre 0; el stock nunca resta de la sugerencia (prueba de no-regresión explícita, parametrizada sobre varios valores de stock); redondeo hacia arriba estricto; período de 1 día (resultado explosivo, documentar); fecha inválida o invertida → importación bloqueada, nunca `period_days = 1` silencioso; EAN con cero inicial se conserva íntegro; EAN inválido/duplicado excluido del cruce; comodín inválido/inexistente en SDOSXSUC bloquea, inexistente en INVEPTOS solo advierte; producto nuevo sin historia TBC → sugerencia 0, agregable manualmente; Full ML parametrizado por D1; código `TISUC#` desconocido genera incidencia (no descarte silencioso, incluye 10600/20030 ahora que Feria/Bodega Bqlla se retiraron — ver §15); días objetivo por ubicación independientes, con fotografía guardada por corrida; reproducibilidad exacta con mismas fuentes y parámetros.
 
 ### 5.4 Pruebas unitarias mínimas a escribir antes de portar código
 
@@ -127,7 +129,7 @@ Las dos pruebas actuales (`test_procurement_engine.py`) dependen de archivos com
 
 - `tests/python/test_readers.py`: preservación de ceros iniciales en EAN, manejo de Latin-1, columnas `us`/`TISUC#` dinámicas y faltantes, detección de encabezado desplazado y alias de columna, mensajes de error con columnas faltantes completas.
 - `tests/python/test_validation.py`: validez de EAN (formatos límite), duplicados, extracción/validez de comodín, parseo de fecha español y período inclusivo, bloqueo ante fecha inválida/invertida, parseo numérico es-CO.
-- `tests/python/test_recommendation.py`: fórmula con ventas positivas y redondeo; ventas cero con/sin stock; **`test_stock_no_altera_la_sugerencia`** parametrizada; **`test_no_existen_campos_de_redistribucion`** (prueba estructural anti-regresión); días objetivo por ubicación; Full ML parametrizada (`@pytest.mark.pending_decision`, ligada a D1); Feria/Bodega Bqlla sin efecto; reproducibilidad; comparación de costos sin tolerancia.
+- `tests/python/test_recommendation.py`: fórmula con ventas positivas y redondeo; ventas cero con/sin stock; **`test_stock_no_altera_la_sugerencia`** parametrizada; **`test_no_existen_campos_de_redistribucion`** (prueba estructural anti-regresión); días objetivo por ubicación; Full ML parametrizada (`@pytest.mark.pending_decision`, ligada a D1); reproducibilidad; comparación de costos sin tolerancia. (Feria/Bodega Bqlla ya no requieren prueba propia: se retiraron del modelo en Fase 2, no hay ubicación que pueda aportarles datos.)
 
 Comando de referencia una vez exista `engine/`: `python -m pytest tests/python -v`.
 
@@ -157,19 +159,20 @@ Convenciones de tipo transversales: PK `uuid default gen_random_uuid()`; dinero 
 | 0010 | `0010_inventory.sql` | `inventory_snapshots`, `inventory_lines`; único índice parcial de "activo" es **por `snapshot_date`**, no global (ver nota en §6.3) | 2 |
 | 0011 | `0011_storage_buckets.sql` | 3 buckets privados + políticas sobre `storage.objects` (adelantado desde Fase 1 porque `import-ui` los necesita para subir archivos) | 2 |
 | 0012 | `0012_harden_fase1_grants.sql` | `revoke all` + `grant` explícito (a `authenticated` **y** `service_role`) sobre las 6 tablas de Fase 1 — la imagen de Supabase concede privilegios de sobra por `alter default privileges`; RLS lo compensaba pero el privilegio efectivo no coincidía con el contrato | 1 (hardening, aplicado en Fase 2) |
-| 0013 | `0013_purchase_runs.sql` | `purchase_runs`, `purchase_run_target_days`, `purchase_run_lines`, `purchase_line_adjustments` + triggers de concurrencia/auditoría | 3 |
-| 0014 | `0014_purchase_orders.sql` | `purchase_orders`, `purchase_order_items`, numeración | 4 |
-| 0015 | `0015_audit_events.sql` | `audit_events` (append-only) | 4 |
-| 0016 | `0016_views.sql` | `latest_supplier_prices`, `cost_changes`, `purchase_run_summary`, `import_issues_view` (`security_invoker = true`) | 4 |
+| 0013 | `0013_retire_feria_bodega.sql` | Cierre de Fase 2 (decisión de negocio, no dato nuevo): desactiva `locations` Feria/Bodega Bqlla (`active = false`) y elimina `inventory_snapshots.fair_mode` — ver §15, "Retiro de Modo Feria y Bodega Bqlla" | 2 (cierre, aplicado tras la integración) |
+| 0014 | `0014_purchase_runs.sql` | `purchase_runs`, `purchase_run_target_days`, `purchase_run_lines`, `purchase_line_adjustments` + triggers de concurrencia/auditoría | 3 |
+| 0015 | `0015_purchase_orders.sql` | `purchase_orders`, `purchase_order_items`, numeración | 4 |
+| 0016 | `0016_audit_events.sql` | `audit_events` (append-only) | 4 |
+| 0017 | `0017_views.sql` | `latest_supplier_prices`, `cost_changes`, `purchase_run_summary`, `import_issues_view` (`security_invoker = true`) | 4 |
 
-Las migraciones 0001-0012 ya están escritas y verificadas contra un contenedor Postgres efímero (`supabase/tests/run_migration_tests.sh`, 139 asertos) — **0007 en adelante todavía no se aplicó al proyecto Supabase real**, pendiente de confirmación del usuario (§14).
+Las migraciones 0001-0013 ya están escritas y verificadas contra un contenedor Postgres efímero (`supabase/tests/run_migration_tests.sh`, 139 asertos) — **0001-0012 ya están aplicadas al proyecto Supabase real** (confirmado end-to-end en producción durante el hotfix de §15: un `import_job` real completó 223.780 líneas). `0013` (retiro de Feria/Bodega Bqlla) queda escrita y verificada en Docker; su aplicación al proyecto real es una acción manual pendiente (§15).
 
 Nota: cada migración nueva a partir de aquí debe seguir concediendo explícitamente los privilegios de tabla a `authenticated` (`select`/`insert`/`update` según corresponda, nunca por defecto) en el mismo archivo que crea la tabla — no depender de privilegios por defecto de Supabase, por la razón documentada en 0006.
 
 ### 6.3 Tablas — columnas y constraints esenciales
 
 - **`profiles`**: `id` = `auth.users.id`; `full_name text not null`; `role user_role default 'viewer'` (`admin`/`buyer`/`viewer`); `active boolean default true`.
-- **`locations`**: `code text unique`, `name text unique` (Av. 19, Bulevar, Calle 74, Bvista, Oviedo, CEDI, Feria, Full MercadoLibre, Bodega Bqlla), `tisuc_code char(5) unique` (10000/10010/10500/10510/10600/10800/20010/20020/20030), `type location_type`, `is_purchase_target boolean` (true solo en las 6 operativas), `active`, `display_order smallint unique`. **Nunca se borran filas**, solo `active = false`.
+- **`locations`**: `code text unique`, `name text unique` (Av. 19, Bulevar, Calle 74, Bvista, Oviedo, CEDI, Feria, Full MercadoLibre, Bodega Bqlla), `tisuc_code char(5) unique` (10000/10010/10500/10510/10600/10800/20010/20020/20030), `type location_type`, `is_purchase_target boolean` (true solo en las 6 operativas), `active`, `display_order smallint unique`. **Nunca se borran filas**, solo `active = false` — así se retiraron Feria y Bodega Bqlla del modelo en `0013_retire_feria_bodega.sql` (ver §15): las 9 filas originales siguen existiendo, esas dos quedaron `active = false`.
 - **`suppliers`**: `name`, `tbc_code char(3) unique check (~ '^[0-9]{3}$')`, `active`, contacto opcional, `nit`.
 - **`products`**: `tbc_sku text unique` (nullable), `ean text unique` (nullable, con check de dígitos), `name`, `current_pvp numeric(14,2)`, `active`. Un EAN inválido nunca crea fila aquí.
 - **`supplier_products`**: `supplier_id fk`, `product_id fk null`, `ean not null`, `supplier_name`, `status` (`matched`/`new`/`unmatched`/`discontinued`). **`unique (supplier_id, ean)`**.
@@ -180,7 +183,7 @@ Nota: cada migración nueva a partir de aquí debe seguir concediendo explícita
 - **`import_issues`**: `import_job_id fk cascade`, `file_id fk`, `severity`, `code` (`ean_invalido`, `ean_duplicado`, `costo_invalido`, `comodin_invalido`, `fecha_invalida`, `tisuc_desconocido`), `source`, `row_number`, `ean`, `sku`, `product_name`, `detail`.
 - **`sales_imports`**: `import_job_id fk unique`, `supplier_id` nullable, `period_start/period_end`, `period_days` generado, `status` (`active`/`superseded`), `created_by`. Índice único parcial `(supplier_id, period_start, period_end) where status='active'`.
 - **`sales_lines`**: `sales_import_id fk cascade`, `ean not null`, `location_id fk`, `product_id null`, `units_sold integer check(>=0)`, `tbc_cost numeric(14,2)`, `source_row_number`. `unique (sales_import_id, ean, location_id)`.
-- **`inventory_snapshots`**: `import_job_id fk unique`, `snapshot_date date`, `fair_mode boolean default false`, `status`. Único índice parcial de "activo" es **`(snapshot_date) where status='active'`**, no global — decisión corregida en Fase 2 tras leer el pipeline real de `import-backend` (`engine/persistence.py` usa `supersede_keys=('snapshot_date',)`): un snapshot global habría hecho fallar cualquier importación de una fecha distinta a la última activa.
+- **`inventory_snapshots`**: `import_job_id fk unique`, `snapshot_date date`, `status`. (`fair_mode boolean` existió hasta `0013_retire_feria_bodega.sql`, que la eliminó junto con el retiro de Modo Feria — ver §15.) Único índice parcial de "activo" es **`(snapshot_date) where status='active'`**, no global — decisión corregida en Fase 2 tras leer el pipeline real de `import-backend` (`engine/persistence.py` usa `supersede_keys=('snapshot_date',)`): un snapshot global habría hecho fallar cualquier importación de una fecha distinta a la última activa.
 - **`inventory_lines`**: `snapshot_id fk cascade`, `ean`, `tbc_sku`, `location_id fk`, `on_hand integer check(>=0)`, `pvp numeric(14,2)`, `supplier_tbc_code char(3)`. `unique (snapshot_id, ean, location_id)`.
 - **`purchase_runs`**: `supplier_id fk restrict`, `sales_import_id fk restrict`, `price_list_id fk restrict`, `inventory_snapshot_id fk null restrict`, `period_start/period_end/period_days`, `status` (`draft`/`calculated`/`locked`/`cancelled`), `engine_version`, `params_hash` (reproducibilidad), `created_by`, `calculated_at`.
 - **`purchase_run_target_days`**: `purchase_run_id fk cascade`, `location_id fk`, `target_days smallint check(>0)`. `unique (run_id, location_id)` — fotografía de días objetivo usados.
@@ -404,7 +407,7 @@ El borrador de API de §11 (heredado de Fase 0) asumía que `POST /api/imports` 
 
 - **Modo Feria**: `engine/pipeline.py` acepta `fair_mode` como parámetro, pero ninguna UI lo expone todavía (no hay selector en `/imports`) — usa `False` por defecto. Sigue siendo la decisión pendiente adicional que señaló `domain-auditor` en Fase 0 (§2).
 - Ventas de INVEPTOS acotadas a un `supplier_id` específico: soportado en `engine/pipeline.py` (resuelve `tbc_code`), pero sin fixture de prueba con archivo real — es el caso raro que el contrato §9 ya marcaba como infrecuente (INVEPTOS casi siempre es global).
-- No se abrió la Fase 3 (compras sugeridas): ni `engine/recommendation.py`, ni `purchase_runs`/`purchase_run_lines`, ni la ruta `/purchase-runs/[id]`. Las migraciones planificadas para Fase 3 siguen en `0013` en adelante (§6.2).
+- No se abrió la Fase 3 (compras sugeridas): ni `engine/recommendation.py`, ni `purchase_runs`/`purchase_run_lines`, ni la ruta `/purchase-runs/[id]`. Las migraciones planificadas para Fase 3 siguen en `0014` en adelante (§6.2) — corridas una posición por `0013_retire_feria_bodega.sql`, cierre de Fase 2.
 
 ### Hotfix de producción tras el primer despliegue real (post Fase 2, sin abrir Fase 3)
 
@@ -450,3 +453,25 @@ POST /api/imports_process 200
 ```
 
 Con esto, el smoke test real que §15 dejaba pendiente ("subir un SDOSXSUC.CSV... y confirmar que el import_job termina en completed") queda hecho, en Producción, con datos reales — no un archivo sintético. El hotfix completo (empaquetado, `SUPABASE_URL`, logging, `mark_failed` best-effort, aviso de UI, bypass de Protección de Despliegue) queda confirmado funcionando de punta a punta.
+
+### Cierre de dos pendientes de Fase 2 (post hotfix, sin abrir Fase 3)
+
+Con el hotfix de producción resuelto, se cerraron los dos pendientes que quedaban documentados en Fase 2: la decisión de negocio de Modo Feria/Bodega Bqlla (§2) y la verificación de RLS con un JWT real (no solo `service_role`, que se salta RLS). Ninguno tocó `engine/pipeline.py`'s otras responsabilidades ni abrió trabajo de Fase 3.
+
+#### Retiro de Modo Feria y Bodega Bqlla
+
+Decisión del usuario: **retirar del modelo**, no conservar como metadato inerte. Cambios:
+
+- `engine/readers.py`: `TISUC_TO_LOCATION` y `SDOS_INVENTORY_MAPPING` ya no incluyen Feria (10600/`us05` variante) ni Bodega Bqlla (20030/`us09`); `SDOS_INVENTORY_MAPPING_FAIR` se eliminó por completo. Un `TISUC#` 10600/20030 en un archivo real hoy es un código desconocido más — genera incidencia `tisuc_desconocido` (`location_for_tisuc`, comportamiento ya existente, no nuevo), no se descarta en silencio. Una columna `us09` presente simplemente no aporta ninguna línea, igual que `us10..us30`.
+- `engine/imports.py` / `engine/pipeline.py`: el parámetro `fair_mode` se eliminó de `prepare_inventory_import` y `run_import_job` — ningún caller del repo lo pasaba nunca (la UI tampoco llegó a exponer el selector), así que el cambio no tiene blast radius fuera de las pruebas.
+- `engine/persistence.py`: `TARGETS[SDOS_INVENTORY].header_columns` ya no incluye `fair_mode`.
+- `supabase/migrations/0013_retire_feria_bodega.sql` (nueva, no se editaron 0003/0010 ya aplicadas): `update locations set active = false where code in ('FERIA','BODBQLLA')` (nunca se borran filas — trigger `locations_prevent_delete` lo impide incluso para `service_role`) y `alter table inventory_snapshots drop column fair_mode`. Empuja las migraciones planificadas de Fase 3 una posición (§6.2: `0013_purchase_runs.sql` → `0014`, etc.).
+- Pruebas actualizadas: `tests/python/test_readers.py`, `test_imports.py`, `test_persistence.py` (247 pruebas Python, todas pasan) y `supabase/tests/sql/_data.sql`/`seed.sql` (fixtures).
+- **Verificado contra el contenedor Postgres efímero** (`supabase/tests/run_migration_tests.sh`, único lugar donde se valida SQL antes de tocar el proyecto real): las 13 migraciones aplican en orden, `seed.sql` sigue siendo idempotente (corrido dos veces), y las 8 suites pgTAP dan **139/139 asertos correctos**, sin cambios en ninguna suite salvo los fixtures ya mencionados.
+- **Pendiente, acción manual fuera de este repo**: aplicar `0013_retire_feria_bodega.sql` al proyecto Supabase real (Preview y Producción ya corren con 0001-0012; `0013` todavía no se aplicó ahí). Hasta entonces, el motor real en producción sigue sin pasar `fair_mode` (ya lo hacía así) pero la base real todavía tiene la columna y las dos ubicaciones activas — inofensivo (nadie las escribe), pero desalineado con el código hasta que se aplique.
+
+#### Verificación de RLS con JWT real
+
+El proyecto tiene una regla propia, explícita en `supabase/tests/run_migration_tests.sh`: la suite pgTAP (incluida `20_rls_by_role.sql`, RLS por rol con JWT simulado vía `set_config`) **nunca se corre contra el proyecto Supabase real**, solo contra el contenedor efímero — a propósito, para no arriesgar la base real con un `INSERT`/`UPDATE` de prueba que no haga `rollback` como se espera. Se respetó esa regla: `20_rls_by_role.sql` corrió en el mismo pase de Docker de arriba, **23/23 asertos correctos** (viewer/buyer/admin, incluida la regla dura de que ni siquiera un admin puede escribir en `sales_*`/`inventory_*` desde el navegador).
+
+Eso cierra la verificación de la **lógica** de las policies. Lo que sigue sin probarse es el camino completo con un JWT emitido de verdad por Supabase Auth a través de la app (`@supabase/ssr` → PostgREST/Postgres real) con una cuenta `buyer`/`admin` real — pendiente, requiere que el usuario provea o cree una cuenta de prueba y la ejerza en `/imports`, `/suppliers`, etc. desde el navegador.

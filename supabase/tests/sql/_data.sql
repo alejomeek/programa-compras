@@ -18,8 +18,8 @@ values ('eeee0000-0000-0000-0000-000000000001','dddd0000-0000-0000-0000-00000000
 insert into public.sales_lines (sales_import_id, ean, location_id, units_sold, tbc_cost, source_row_number)
 values ('eeee0000-0000-0000-0000-000000000001','7700000000011',(select id from public.locations where code='CEDI'),10,15000.00,2);
 
-insert into public.inventory_snapshots (id, import_job_id, snapshot_date, fair_mode, status)
-values ('eeee0000-0000-0000-0000-000000000002','dddd0000-0000-0000-0000-000000000002','2026-02-01',false,'active');
+insert into public.inventory_snapshots (id, import_job_id, snapshot_date, status)
+values ('eeee0000-0000-0000-0000-000000000002','dddd0000-0000-0000-0000-000000000002','2026-02-01','active');
 
 insert into public.inventory_lines (snapshot_id, ean, tbc_sku, location_id, on_hand, pvp, supplier_tbc_code)
 values ('eeee0000-0000-0000-0000-000000000002','7700000000011','TST-0001',(select id from public.locations where code='CEDI'),5,45900.00,'801');

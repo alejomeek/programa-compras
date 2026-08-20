@@ -350,7 +350,6 @@ def test_importacion_de_inventario_exitosa():
     assert prepared.job_type == ImportType.SDOS_INVENTORY
     assert prepared.header == {
         "snapshot_date": date(2025, 2, 1),
-        "fair_mode": False,
         "status": "active",
     }
     assert prepared.rows_total == 2
@@ -385,16 +384,16 @@ def test_snapshot_date_por_defecto_es_hoy():
     assert prepared.header["snapshot_date"] == date.today()
 
 
-def test_modo_feria_cambia_el_mapeo_de_columnas():
-    columns = ("Codpro", "Nompro", "Valuni", "Codean", "Codea2", "us05", "us06")
-    rows = [sdos_row(us05="7", us06="9")]
+def test_columna_us09_retirada_no_genera_linea_de_bodega_bqlla():
+    """Bodega Bqlla se retiró del modelo (contrato §2): ``us09`` presente en
+    el archivo ya no produce ninguna línea, igual que cualquier otra columna
+    fuera del mapeo vigente."""
+    columns = ("Codpro", "Nompro", "Valuni", "Codean", "Codea2", "us05", "us09")
+    rows = [sdos_row(us05="7", us09="9")]
 
-    normal = prepare_inventory_import(sdos_frame(rows, columns=columns))
-    feria = prepare_inventory_import(sdos_frame(rows, columns=columns), fair_mode=True)
+    prepared = prepare_inventory_import(sdos_frame(rows, columns=columns))
 
-    assert {line["location_name"] for line in normal.lines} == {"Oviedo", "CEDI"}
-    assert {line["location_name"] for line in feria.lines} == {"Feria", "Oviedo"}
-    assert feria.header["fair_mode"] is True
+    assert {line["location_name"] for line in prepared.lines} == {"Oviedo"}
 
 
 def test_columna_us_ausente_no_es_error_solo_no_genera_linea():

@@ -184,17 +184,15 @@ def test_las_incidencias_se_guardan_con_el_trabajo_y_el_archivo():
     assert rows[0][3] == IssueCode.EAN_INVALIDO
 
 
-def test_importacion_de_inventario_se_guarda_con_su_cabecera_y_fair_mode():
+def test_importacion_de_inventario_se_guarda_con_su_cabecera():
     conn = FakeConnection()
 
-    result = persist_import(
-        conn, import_job_id="job-2", prepared=inventory(fair_mode=True), file_id="file-2"
-    )
+    result = persist_import(conn, import_job_id="job-2", prepared=inventory(), file_id="file-2")
 
     assert result.ok
     sql, params = only(conn.committed_matching("INSERT INTO inventory_snapshots"))
-    assert "(import_job_id, snapshot_date, fair_mode, status)" in sql
-    assert params == ("job-2", date(2025, 2, 1), True, "active")
+    assert "(import_job_id, snapshot_date, status)" in sql
+    assert params == ("job-2", date(2025, 2, 1), "active")
     _, rows = only(conn.committed_matching("INSERT INTO inventory_lines"))
     assert rows[0][0] == "inventory_snapshots-1"
 

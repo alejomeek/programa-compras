@@ -122,7 +122,7 @@ TARGETS: dict[str, ImportTarget] = {
     ImportType.SDOS_INVENTORY: ImportTarget(
         job_type=ImportType.SDOS_INVENTORY,
         header_table="inventory_snapshots",
-        header_columns=("import_job_id", "snapshot_date", "fair_mode", "status"),
+        header_columns=("import_job_id", "snapshot_date", "status"),
         line_table="inventory_lines",
         line_fk="snapshot_id",
         line_columns=(
