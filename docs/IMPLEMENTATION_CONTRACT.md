@@ -441,3 +441,12 @@ La misma verificación reveló un problema distinto y anterior a este hotfix: `_
 Como no hay conexión, `mark_failed` correctamente nunca se promete (ver arriba): los `import_jobs` de esas pruebas quedan en `pending` sin `error_message`, tal como está diseñado — no es un bug nuevo, es la ausencia de conexión haciendo exactamente lo que debía.
 
 **Fuera de alcance de este hotfix, requiere acción manual con la contraseña real de Supabase** (Project Settings → Database → Connection string en el proyecto Supabase) para corregir `SUPABASE_DB_URL` en Vercel (Preview y Producción) y redeployar.
+
+**Resuelto y verificado end-to-end en Producción.** Tras corregir `SUPABASE_DB_URL` y redeployar Preview y Producción (`vercel redeploy`), `vercel logs` contra Producción confirma el primer `import_job` real procesado de punta a punta:
+
+```
+INFO imports_process: job_id=ccd38ad7-9e76-495e-9fd8-a81023e29ebe completado: 223780 líneas, 1514 incidencias.
+POST /api/imports_process 200
+```
+
+Con esto, el smoke test real que §15 dejaba pendiente ("subir un SDOSXSUC.CSV... y confirmar que el import_job termina en completed") queda hecho, en Producción, con datos reales — no un archivo sintético. El hotfix completo (empaquetado, `SUPABASE_URL`, logging, `mark_failed` best-effort, aviso de UI, bypass de Protección de Despliegue) queda confirmado funcionando de punta a punta.
