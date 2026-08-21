@@ -80,6 +80,15 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Log temporal de diagnostico (hallazgo en curso): confirmar exactamente
+  // qué mandó el formulario, para comparar contra el log de new-run-options.
+  console.log(
+    "[purchase-runs POST] supplierId=%s salesImportId=%s priceListId=%s",
+    supplierId,
+    salesImportId,
+    priceListId,
+  );
+
   const init = calculateRequestInit(
     {
       supplierId,
