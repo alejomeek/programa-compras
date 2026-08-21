@@ -58,11 +58,22 @@ if not logger.handlers:
 
 
 def _connection() -> Any:
-    """Conexión psycopg de servicio. Se abre aquí, nunca dentro de `engine/`."""
+    """Conexión psycopg de servicio. Se abre aquí, nunca dentro de `engine/`.
+
+    `prepare_threshold=None` desactiva los prepared statements automáticos
+    del lado del servidor: `SUPABASE_DB_URL` apunta al connection pooler de
+    Supabase en modo "Transaction" (puerto 6543), que puede cambiar la
+    conexión física de fondo entre consultas — un prepared statement queda
+    atado a una conexión física puntual y una consulta posterior enrutada a
+    otra puede chocar con un nombre (`_pg3_0`, ...) ya usado por otra sesión.
+    Hallazgo real en producción (`engine.recommendation.prepare_recommendation`
+    hace varias consultas distintas en una sola conexión, más superficie que
+    `engine.pipeline.run_import_job` para disparar el auto-prepare).
+    """
     import psycopg  # import diferido: solo esta función lo necesita
 
     db_url = os.environ["SUPABASE_DB_URL"]
-    return psycopg.connect(db_url, autocommit=False)
+    return psycopg.connect(db_url, autocommit=False, prepare_threshold=None)
 
 
 def _process(payload: dict, *, connect: Callable[[], Any] = _connection) -> tuple[int, dict]:
