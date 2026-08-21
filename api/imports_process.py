@@ -94,11 +94,21 @@ class HttpStorage:
 
 
 def _connection() -> Any:
-    """Conexión psycopg de servicio. Se abre aquí, nunca dentro de `engine/`."""
+    """Conexión psycopg de servicio. Se abre aquí, nunca dentro de `engine/`.
+
+    `prepare_threshold=None` desactiva los prepared statements automáticos
+    del lado del servidor: `SUPABASE_DB_URL` apunta al connection pooler de
+    Supabase en modo "Transaction" (puerto 6543), que puede cambiar la
+    conexión física de fondo entre consultas — un prepared statement queda
+    atado a una conexión física puntual y una consulta posterior enrutada a
+    otra puede chocar con un nombre (`_pg3_0`, ...) ya usado por otra sesión.
+    Encontrado en producción vía `api/purchase_runs_calculate.py` (mismo
+    patrón de conexión); se corrige acá también antes de que se dispare aquí.
+    """
     import psycopg  # import diferido: solo esta función lo necesita
 
     db_url = os.environ["SUPABASE_DB_URL"]
-    return psycopg.connect(db_url, autocommit=False)
+    return psycopg.connect(db_url, autocommit=False, prepare_threshold=None)
 
 
 def _default_storage_factory(base_url: str, service_role_key: str) -> StorageDownloader:
