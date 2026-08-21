@@ -64,6 +64,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: firstError.message }, { status: 500 });
   }
 
+  // Log temporal de diagnostico (hallazgo en curso, ver PR): confirmar que
+  // los price_lists devueltos de verdad tienen este supplierId. Sin datos
+  // sensibles, solo ids.
+  console.log(
+    "[new-run-options] supplierId=%s priceLists=%o",
+    supplierId,
+    (priceListsResult.data ?? []).map((row) => row.id),
+  );
+
   const options: NewRunOptions = {
     salesImports: (salesImportsResult.data ?? []).map((row) => ({
       id: row.id,
