@@ -7,6 +7,7 @@ igual que `job_status`/`max_version` ya hacen para `engine.persistence`.
 
 from __future__ import annotations
 
+import uuid
 from decimal import Decimal
 from typing import Any
 
@@ -279,6 +280,19 @@ def test_price_list_de_otro_proveedor_lanza_error() -> None:
     conn = _conn(rec_price_list_supplier_id="otro-proveedor")
     with pytest.raises(ValidationError):
         _run(conn)
+
+
+def test_price_list_del_mismo_proveedor_no_lanza_error_aunque_la_db_devuelva_uuid_objeto() -> None:
+    """Regresión: psycopg devuelve columnas `uuid` como `uuid.UUID`, pero
+    `supplier_id` llega como `str` desde el JSON de la petición HTTP. Antes
+    de este fix, `UUID(...) != "..."` daba `True` SIEMPRE en Python aunque
+    representaran el mismo valor — rechazaba toda corrida real. `FakeConnection`
+    con puros `str` nunca lo detectó; esta prueba simula el tipo real."""
+    supplier_uuid = uuid.UUID("4fb03706-48b3-4de5-9b8d-5fee086ffa7e")
+    conn = _conn(rec_price_list_supplier_id=supplier_uuid)  # tipo uuid.UUID, no str
+    prepared = _run(conn, supplier_id=str(supplier_uuid))  # tipo str, como llega del JSON
+
+    assert prepared.eligible_product_count >= 0  # no lanzó ValidationError
 
 
 def test_inventory_snapshot_inexistente_lanza_error() -> None:

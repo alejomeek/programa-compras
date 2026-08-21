@@ -281,7 +281,16 @@ def _validate_price_list_supplier(conn: Any, price_list_id: Any, supplier_id: An
         _close(cursor)
     if row is None:
         raise ValidationError(f"No existe la lista de precios {price_list_id}.")
-    if row[0] != supplier_id:
+    # str(...) en ambos lados: psycopg devuelve columnas `uuid` como
+    # `uuid.UUID`, pero `supplier_id` llega como texto plano desde el JSON de
+    # la petición HTTP (api/purchase_runs_calculate.py) — `UUID(...) != "..."`
+    # es SIEMPRE `True` en Python aunque representen el mismo valor
+    # (`UUID.__eq__` no sabe comparar contra `str`), así que esta validación
+    # rechazaba toda corrida real sin importar que la lista sí perteneciera
+    # al proveedor. Bug invisible en `tests/python` porque `FakeConnection`
+    # nunca simulaba ese tipo de dato (los fixtures usan `str` de punta a
+    # punta) — encontrado en producción, con psycopg real.
+    if str(row[0]) != str(supplier_id):
         raise ValidationError(
             f"La lista de precios {price_list_id} no pertenece al proveedor {supplier_id}."
         )
