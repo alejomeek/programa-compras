@@ -57,6 +57,18 @@ export async function GET(
     .order("ean", { ascending: true })
     .range(from, from + pageSize - 1);
 
+  // Log temporal de diagnostico (hallazgo en curso): confirmar que el
+  // parametro `search` llega y se usa. Sin datos sensibles.
+  console.log(
+    "[purchase-runs lines] locationCode=%s status=%s search=%s page=%s count=%s firstEans=%o",
+    locationCode,
+    status,
+    search,
+    page,
+    count,
+    (data ?? []).slice(0, 5).map((row) => row.ean),
+  );
+
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
