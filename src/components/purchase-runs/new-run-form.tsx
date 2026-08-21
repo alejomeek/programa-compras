@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -45,7 +45,16 @@ export function NewRunForm({ suppliers, onCreateRun }: NewRunFormProps) {
 
   const bloqueado = !hasSuppliers(suppliers) || phase === "submitting";
 
+  // Guarda cuál fue la ÚLTIMA selección de proveedor pedida. Si el usuario
+  // cambia de proveedor dos veces rápido, la petición de la primera puede
+  // resolver DESPUÉS que la de la segunda (orden de red, no de clics) y
+  // pisar sus opciones — mostrando una lista de precios de otro proveedor
+  // bajo el nombre del proveedor que sí quedó seleccionado. Cualquier
+  // respuesta que no sea la del proveedor vigente se descarta.
+  const latestSupplierRequestRef = useRef<string | null>(null);
+
   async function onSupplierChange(next: string) {
+    latestSupplierRequestRef.current = next;
     setSupplierId(next);
     setOptions(null);
     setSalesImportId(null);
@@ -58,6 +67,7 @@ export function NewRunForm({ suppliers, onCreateRun }: NewRunFormProps) {
     try {
       const response = await fetch(`/api/purchase-runs/new-run-options?supplierId=${next}`);
       const body = await response.json().catch(() => ({}) as { error?: string });
+      if (latestSupplierRequestRef.current !== next) return; // ya no es la selección vigente
       if (!response.ok) {
         throw new Error((body as { error?: string }).error ?? "No se pudieron cargar las fuentes.");
       }
@@ -70,6 +80,7 @@ export function NewRunForm({ suppliers, onCreateRun }: NewRunFormProps) {
       );
       setPhase("idle");
     } catch (cause) {
+      if (latestSupplierRequestRef.current !== next) return;
       setError(cause instanceof Error ? cause.message : "No se pudieron cargar las fuentes.");
       setPhase("error");
     }
