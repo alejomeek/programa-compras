@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 
 import { PurchaseRunLinesTable } from "@/components/purchase-runs/purchase-run-lines-table";
 import { StatusBadge } from "@/components/status-badge";
@@ -59,7 +59,15 @@ export function PurchaseRunDetailView({ run, initialLines, initialTotal }: Purch
   const adjustable = isAdjustable(run.status);
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  // Misma condición de carrera que ya se corrigió en NewRunForm: escribir en
+  // "Buscar por EAN" dispara una petición por cada tecla, y una respuesta
+  // vieja puede resolver DESPUÉS que una más nueva (orden de red, no de
+  // tecleo) y pisar la tabla con resultados de una búsqueda intermedia.
+  // Un token por llamada descarta cualquier respuesta que ya no sea la última pedida.
+  const latestRequestRef = useRef(0);
+
   async function fetchLines(nextPage: number, filters: { locationCode: string; status: string; search: string }) {
+    const requestId = ++latestRequestRef.current;
     setLoading(true);
     setLoadError(null);
     const query = new URLSearchParams({ page: String(nextPage), pageSize: String(PAGE_SIZE) });
@@ -70,6 +78,7 @@ export function PurchaseRunDetailView({ run, initialLines, initialTotal }: Purch
     try {
       const response = await fetch(`/api/purchase-runs/${run.id}/lines?${query.toString()}`);
       const body = await response.json().catch(() => ({}) as { error?: string });
+      if (latestRequestRef.current !== requestId) return; // ya no es la última petición
       if (!response.ok) {
         throw new Error((body as { error?: string }).error ?? "No se pudieron cargar las líneas.");
       }
@@ -78,9 +87,10 @@ export function PurchaseRunDetailView({ run, initialLines, initialTotal }: Purch
       setTotal(loaded.total);
       setPage(nextPage);
     } catch (cause) {
+      if (latestRequestRef.current !== requestId) return;
       setLoadError(cause instanceof Error ? cause.message : "No se pudieron cargar las líneas.");
     } finally {
-      setLoading(false);
+      if (latestRequestRef.current === requestId) setLoading(false);
     }
   }
 
