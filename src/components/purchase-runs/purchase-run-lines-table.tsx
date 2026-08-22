@@ -149,7 +149,6 @@ function LineRow({
   onLineAdjusted: (updated: PurchaseRunLineRow) => void;
 }) {
   const [quantity, setQuantity] = useState(String(line.finalQuantity));
-  const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -171,7 +170,6 @@ function LineRow({
         body: JSON.stringify({
           newQuantity,
           expectedRowVersion: line.rowVersion,
-          reason: reason.trim() || undefined,
         }),
       });
       const body = await response.json().catch(() => ({}) as Record<string, unknown>);
@@ -194,7 +192,6 @@ function LineRow({
         note: updated.note,
       });
       setQuantity(String(updated.finalQuantity));
-      setReason("");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "No se pudo guardar el ajuste.");
     } finally {
@@ -256,21 +253,11 @@ function LineRow({
               aria-label={`Cantidad final para ${line.ean} en ${line.locationName}`}
             />
             {isDirty ? (
-              <Input
-                value={reason}
-                disabled={saving}
-                onChange={(event) => setReason(event.target.value)}
-                placeholder="Motivo (opcional)"
-                className="h-8"
-                aria-label={`Motivo del ajuste de ${line.ean} en ${line.locationName}`}
-              />
+              <Button type="button" size="xs" onClick={onSave} disabled={saving}>
+                {saving ? "Guardando…" : "Guardar"}
+              </Button>
             ) : null}
           </div>
-          {isDirty ? (
-            <Button type="button" size="xs" onClick={onSave} disabled={saving}>
-              {saving ? "Guardando…" : "Guardar"}
-            </Button>
-          ) : null}
           {error ? (
             <Alert variant="destructive" className="px-2 py-1.5">
               <AlertTitle className="text-xs">No se guardó</AlertTitle>
