@@ -21,7 +21,7 @@ import type { PurchaseRunLineRow } from "@/app/(app)/purchase-runs/types";
 import { cn } from "@/lib/utils";
 
 const COLUMNS = [
-  "EAN / producto",
+  "Producto / EAN",
   "Ubicación",
   "Ventas",
   "Sugerida",
@@ -165,10 +165,17 @@ function LineRow({
   return (
     <TableRow>
       <TableCell>
-        <span className="font-medium text-foreground">{line.ean}</span>
         {line.productName ? (
-          <span className="block text-xs text-muted-foreground">{line.productName}</span>
+          <span className="font-medium text-foreground">{line.productName}</span>
         ) : null}
+        <span
+          className={cn(
+            "block text-xs",
+            line.productName ? "text-muted-foreground" : "font-medium text-foreground",
+          )}
+        >
+          {line.ean}
+        </span>
       </TableCell>
       <TableCell className="whitespace-nowrap">{line.locationName}</TableCell>
       <TableCell className="whitespace-nowrap">{line.salesUnits}</TableCell>
