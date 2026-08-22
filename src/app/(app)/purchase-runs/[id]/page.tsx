@@ -6,6 +6,8 @@ import { PurchaseRunDetailView } from "@/components/purchase-runs/purchase-run-d
 import { createClient } from "@/lib/supabase/server";
 import { embeddedOne } from "@/lib/supabase/relations";
 import { productNamesByEan } from "@/lib/purchase-runs/product-names";
+import { getSessionUser } from "@/lib/auth/session";
+import { canWrite } from "@/lib/auth/roles";
 import type {
   PurchaseRunDetail,
   PurchaseRunLineRow,
@@ -38,6 +40,7 @@ export default async function PurchaseRunDetailPage({
 }) {
   const { id } = await params;
   const supabase = await createClient();
+  const sessionUser = await getSessionUser();
 
   const { data: run, error: runError } = await supabase
     .from("purchase_runs")
@@ -143,7 +146,12 @@ export default async function PurchaseRunDetailPage({
         title="Detalle de la corrida"
         description={`Proveedor ${detail.supplierName ?? "—"}. Tabla por producto y ubicación: ventas, días objetivo, compra sugerida y cantidad final.`}
       />
-      <PurchaseRunDetailView run={detail} initialLines={lines} initialTotal={count ?? 0} />
+      <PurchaseRunDetailView
+        run={detail}
+        initialLines={lines}
+        initialTotal={count ?? 0}
+        canWrite={Boolean(sessionUser && canWrite(sessionUser.profile.role))}
+      />
     </div>
   );
 }

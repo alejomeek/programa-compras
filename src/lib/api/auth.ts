@@ -15,6 +15,24 @@ import type { SessionUser } from "@/types/profile";
 export async function requireWriter(): Promise<
   { user: SessionUser } | { response: NextResponse }
 > {
+  const auth = await requireActiveUser();
+  if ("response" in auth) return auth;
+  const { user } = auth;
+  if (!canWrite(user.profile.role)) {
+    return {
+      response: NextResponse.json(
+        { error: "Tu rol no tiene permiso para esta acción." },
+        { status: 403 },
+      ),
+    };
+  }
+  return { user };
+}
+
+/** Usuario autenticado y activo, sin exigir rol de escritura. */
+export async function requireActiveUser(): Promise<
+  { user: SessionUser } | { response: NextResponse }
+> {
   const user = await getSessionUser();
   if (!user) {
     return {
@@ -25,14 +43,6 @@ export async function requireWriter(): Promise<
     return {
       response: NextResponse.json(
         { error: "Esta cuenta está desactivada." },
-        { status: 403 },
-      ),
-    };
-  }
-  if (!canWrite(user.profile.role)) {
-    return {
-      response: NextResponse.json(
-        { error: "Tu rol no tiene permiso para esta acción." },
         { status: 403 },
       ),
     };

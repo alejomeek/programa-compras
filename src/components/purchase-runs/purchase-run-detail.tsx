@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { PurchaseRunLinesTable } from "@/components/purchase-runs/purchase-run-lines-table";
 import { StatusBadge } from "@/components/status-badge";
@@ -33,6 +34,7 @@ export type PurchaseRunDetailViewProps = {
   run: PurchaseRunDetail;
   initialLines: readonly PurchaseRunLineRow[];
   initialTotal: number;
+  canWrite: boolean;
 };
 
 /**
@@ -42,7 +44,13 @@ export type PurchaseRunDetailViewProps = {
  * acá, porque una corrida real puede tener cientos/miles de líneas — traer
  * todas de una no escala como sí lo hace la tabla de 50 filas de `/imports`.
  */
-export function PurchaseRunDetailView({ run, initialLines, initialTotal }: PurchaseRunDetailViewProps) {
+export function PurchaseRunDetailView({
+  run,
+  initialLines,
+  initialTotal,
+  canWrite,
+}: PurchaseRunDetailViewProps) {
+  const router = useRouter();
   const locationFieldId = useId();
   const statusFieldId = useId();
   const searchFieldId = useId();
@@ -55,8 +63,11 @@ export function PurchaseRunDetailView({ run, initialLines, initialTotal }: Purch
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [selectedLineIds, setSelectedLineIds] = useState<ReadonlySet<string>>(new Set());
+  const [creatingOrders, setCreatingOrders] = useState(false);
+  const [createOrderError, setCreateOrderError] = useState<string | null>(null);
 
-  const adjustable = isAdjustable(run.status);
+  const adjustable = isAdjustable(run.status) && canWrite;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   // Misma condición de carrera que ya se corrigió en NewRunForm: escribir en
@@ -110,6 +121,33 @@ export function PurchaseRunDetailView({ run, initialLines, initialTotal }: Purch
     setLines((previous) => previous.map((line) => (line.id === updated.id ? updated : line)));
   }
 
+  function onLineSelectionChange(lineId: string, selected: boolean) {
+    setSelectedLineIds((previous) => {
+      const next = new Set(previous);
+      if (selected) next.add(lineId);
+      else next.delete(lineId);
+      return next;
+    });
+  }
+
+  async function createOrders() {
+    setCreatingOrders(true);
+    setCreateOrderError(null);
+    try {
+      const response = await fetch("/api/purchase-orders", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ runLineIds: [...selectedLineIds] }),
+      });
+      const body = await response.json().catch(() => ({}) as { error?: string });
+      if (!response.ok) throw new Error(body.error ?? "No se pudieron crear los borradores.");
+      router.push("/orders");
+    } catch (cause) {
+      setCreateOrderError(cause instanceof Error ? cause.message : "No se pudieron crear los borradores.");
+      setCreatingOrders(false);
+    }
+  }
+
   return (
     <div className="space-y-8">
       <Card>
@@ -148,7 +186,7 @@ export function PurchaseRunDetailView({ run, initialLines, initialTotal }: Purch
             </ul>
           </div>
 
-          {!adjustable ? (
+          {!isAdjustable(run.status) ? (
             <Alert>
               <AlertTitle>Esta corrida no admite ajustes</AlertTitle>
               <AlertDescription>
@@ -161,9 +199,20 @@ export function PurchaseRunDetailView({ run, initialLines, initialTotal }: Purch
       </Card>
 
       <section aria-labelledby="lineas-corrida" className="space-y-4">
-        <h2 id="lineas-corrida" className="text-lg font-semibold text-foreground">
-          Líneas
-        </h2>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 id="lineas-corrida" className="text-lg font-semibold text-foreground">
+            Líneas
+          </h2>
+          {canWrite ? (
+            <Button
+              type="button"
+              disabled={!adjustable || selectedLineIds.size === 0 || creatingOrders}
+              onClick={() => void createOrders()}
+            >
+              {creatingOrders ? "Creando borradores…" : `Crear órdenes (${selectedLineIds.size})`}
+            </Button>
+          ) : null}
+        </div>
 
         <div className="grid gap-4 sm:grid-cols-3">
           <div className="space-y-2">
@@ -217,12 +266,20 @@ export function PurchaseRunDetailView({ run, initialLines, initialTotal }: Purch
             <AlertDescription>{loadError}</AlertDescription>
           </Alert>
         ) : null}
+        {createOrderError ? (
+          <Alert variant="destructive">
+            <AlertTitle>No se pudieron crear los borradores</AlertTitle>
+            <AlertDescription>{createOrderError}</AlertDescription>
+          </Alert>
+        ) : null}
 
         <PurchaseRunLinesTable
           runId={run.id}
           lines={lines}
           isLoading={loading}
           adjustable={adjustable}
+          selectedLineIds={selectedLineIds}
+          onLineSelectionChange={onLineSelectionChange}
           onLineAdjusted={onLineAdjusted}
         />
 
@@ -266,4 +323,3 @@ function Dato({ termino, valor }: { termino: string; valor: string }) {
     </div>
   );
 }
-

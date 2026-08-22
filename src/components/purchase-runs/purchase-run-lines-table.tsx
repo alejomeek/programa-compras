@@ -21,6 +21,7 @@ import type { PurchaseRunLineRow } from "@/app/(app)/purchase-runs/types";
 import { cn } from "@/lib/utils";
 
 const COLUMNS = [
+  "Seleccionar",
   "Producto / EAN",
   "Ubicación",
   "Ventas",
@@ -36,6 +37,8 @@ export type PurchaseRunLinesTableProps = {
   lines: readonly PurchaseRunLineRow[];
   isLoading?: boolean;
   adjustable: boolean;
+  selectedLineIds: ReadonlySet<string>;
+  onLineSelectionChange: (lineId: string, selected: boolean) => void;
   onLineAdjusted: (updated: PurchaseRunLineRow) => void;
 };
 
@@ -44,6 +47,8 @@ export function PurchaseRunLinesTable({
   lines,
   isLoading = false,
   adjustable,
+  selectedLineIds,
+  onLineSelectionChange,
   onLineAdjusted,
 }: PurchaseRunLinesTableProps) {
   if (isLoading) {
@@ -89,6 +94,8 @@ export function PurchaseRunLinesTable({
             runId={runId}
             line={line}
             adjustable={adjustable}
+            selected={selectedLineIds.has(line.id)}
+            onSelectionChange={onLineSelectionChange}
             onLineAdjusted={onLineAdjusted}
           />
         ))}
@@ -101,11 +108,15 @@ function LineRow({
   runId,
   line,
   adjustable,
+  selected,
+  onSelectionChange,
   onLineAdjusted,
 }: {
   runId: string;
   line: PurchaseRunLineRow;
   adjustable: boolean;
+  selected: boolean;
+  onSelectionChange: (lineId: string, selected: boolean) => void;
   onLineAdjusted: (updated: PurchaseRunLineRow) => void;
 }) {
   const [quantity, setQuantity] = useState(String(line.finalQuantity));
@@ -164,6 +175,16 @@ function LineRow({
 
   return (
     <TableRow>
+      <TableCell>
+        <input
+          type="checkbox"
+          className="size-4 accent-primary"
+          checked={selected}
+          disabled={!adjustable || line.finalQuantity <= 0 || line.unitCost === null}
+          onChange={(event) => onSelectionChange(line.id, event.target.checked)}
+          aria-label={`Seleccionar ${line.productName ?? line.ean} para crear orden`}
+        />
+      </TableCell>
       <TableCell>
         {line.productName ? (
           <span className="font-medium text-foreground">{line.productName}</span>
