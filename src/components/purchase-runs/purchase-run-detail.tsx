@@ -130,6 +130,17 @@ export function PurchaseRunDetailView({
     });
   }
 
+  function onLinesSelectionChange(lineIds: readonly string[], selected: boolean) {
+    setSelectedLineIds((previous) => {
+      const next = new Set(previous);
+      for (const lineId of lineIds) {
+        if (selected) next.add(lineId);
+        else next.delete(lineId);
+      }
+      return next;
+    });
+  }
+
   async function createOrders() {
     setCreatingOrders(true);
     setCreateOrderError(null);
@@ -280,6 +291,7 @@ export function PurchaseRunDetailView({
           adjustable={adjustable}
           selectedLineIds={selectedLineIds}
           onLineSelectionChange={onLineSelectionChange}
+          onLinesSelectionChange={onLinesSelectionChange}
           onLineAdjusted={onLineAdjusted}
         />
 

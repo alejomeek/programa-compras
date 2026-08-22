@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PackageSearch } from "lucide-react";
 
 import { EmptyState } from "@/components/empty-state";
@@ -39,6 +39,7 @@ export type PurchaseRunLinesTableProps = {
   adjustable: boolean;
   selectedLineIds: ReadonlySet<string>;
   onLineSelectionChange: (lineId: string, selected: boolean) => void;
+  onLinesSelectionChange: (lineIds: readonly string[], selected: boolean) => void;
   onLineAdjusted: (updated: PurchaseRunLineRow) => void;
 };
 
@@ -49,8 +50,22 @@ export function PurchaseRunLinesTable({
   adjustable,
   selectedLineIds,
   onLineSelectionChange,
+  onLinesSelectionChange,
   onLineAdjusted,
 }: PurchaseRunLinesTableProps) {
+  const selectableLineIds = lines
+    .filter((line) => line.finalQuantity > 0 && line.unitCost !== null)
+    .map((line) => line.id);
+  const allVisibleSelected =
+    selectableLineIds.length > 0 && selectableLineIds.every((lineId) => selectedLineIds.has(lineId));
+  const someVisibleSelected =
+    !allVisibleSelected && selectableLineIds.some((lineId) => selectedLineIds.has(lineId));
+  const selectAllRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (selectAllRef.current) selectAllRef.current.indeterminate = someVisibleSelected;
+  }, [someVisibleSelected]);
+
   if (isLoading) {
     return (
       <div className="space-y-2" aria-busy="true" aria-live="polite">
@@ -80,7 +95,21 @@ export function PurchaseRunLinesTable({
       </caption>
       <TableHeader>
         <TableRow>
-          {COLUMNS.map((column) => (
+          <TableHead scope="col">
+            <label className="flex items-center gap-2">
+              <input
+                ref={selectAllRef}
+                type="checkbox"
+                className="size-4 accent-primary"
+                checked={allVisibleSelected}
+                disabled={!adjustable || selectableLineIds.length === 0}
+                onChange={(event) => onLinesSelectionChange(selectableLineIds, event.target.checked)}
+                aria-label="Seleccionar todas las líneas elegibles visibles"
+              />
+              <span>Seleccionar</span>
+            </label>
+          </TableHead>
+          {COLUMNS.slice(1).map((column) => (
             <TableHead key={column} scope="col">
               {column}
             </TableHead>
