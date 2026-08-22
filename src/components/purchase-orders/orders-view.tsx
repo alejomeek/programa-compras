@@ -61,7 +61,7 @@ export function formatCop(value: string) {
   return Number.isFinite(amount) ? `$ ${amount.toLocaleString("es-CO", { maximumFractionDigits: 0 })}` : "—";
 }
 
-function formatOrderDate(value: string) {
+export function formatOrderDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
   return new Intl.DateTimeFormat("es-CO", {
