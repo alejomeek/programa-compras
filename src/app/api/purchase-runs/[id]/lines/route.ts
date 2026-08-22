@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireWriter } from "@/lib/api/auth";
 import { createClient } from "@/lib/supabase/server";
 import { embeddedOne } from "@/lib/supabase/relations";
+import { productNamesByEan } from "@/lib/purchase-runs/product-names";
 import type { PurchaseRunLineRow } from "@/app/(app)/purchase-runs/types";
 
 export const dynamic = "force-dynamic";
@@ -53,20 +54,32 @@ export async function GET(
   }
 
   const from = (page - 1) * pageSize;
-  const { data, error, count } = await query
-    .order("ean", { ascending: true })
-    .range(from, from + pageSize - 1);
+  const [{ data, error, count }, { data: run }] = await Promise.all([
+    query.order("ean", { ascending: true }).range(from, from + pageSize - 1),
+    supabase.from("purchase_runs").select("price_list_id").eq("id", id).maybeSingle(),
+  ]);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  const lineEans = [...new Set((data ?? []).map((row) => row.ean))];
+  const { data: priceListItems } = run?.price_list_id && lineEans.length
+    ? await supabase
+        .from("price_list_items")
+        .select("ean, raw")
+        .eq("price_list_id", run.price_list_id)
+        .in("ean", lineEans)
+    : { data: [] };
+  const priceListNames = productNamesByEan(priceListItems ?? []);
 
   const lines: PurchaseRunLineRow[] = (data ?? []).map((row) => {
     const location = embeddedOne<{ code: string; name: string }>(row.locations);
     return {
       id: row.id,
       ean: row.ean,
-      productName: embeddedOne<{ name: string }>(row.products)?.name ?? null,
+      productName:
+        priceListNames.get(row.ean) ?? embeddedOne<{ name: string }>(row.products)?.name ?? null,
       locationCode: location?.code ?? "",
       locationName: location?.name ?? "",
       salesUnits: row.sales_units,

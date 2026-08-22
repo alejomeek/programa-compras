@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/page-header";
 import { PurchaseRunDetailView } from "@/components/purchase-runs/purchase-run-detail";
 import { createClient } from "@/lib/supabase/server";
 import { embeddedOne } from "@/lib/supabase/relations";
+import { productNamesByEan } from "@/lib/purchase-runs/product-names";
 import type {
   PurchaseRunDetail,
   PurchaseRunLineRow,
@@ -83,6 +84,19 @@ export default async function PurchaseRunDetailPage({
     };
   });
 
+  // La relación opcional con `products` no se llena para todos los EAN. La
+  // lista de precios de esta corrida sí conserva el nombre provisto por el
+  // proveedor, incluso para corridas históricas.
+  const lineEans = [...new Set((linesData ?? []).map((row) => row.ean))];
+  const { data: priceListItems } = lineEans.length
+    ? await supabase
+        .from("price_list_items")
+        .select("ean, raw")
+        .eq("price_list_id", run.price_list_id)
+        .in("ean", lineEans)
+    : { data: [] };
+  const priceListNames = productNamesByEan(priceListItems ?? []);
+
   const detail: PurchaseRunDetail = {
     id: run.id,
     status: run.status,
@@ -105,7 +119,8 @@ export default async function PurchaseRunDetailPage({
     return {
       id: row.id,
       ean: row.ean,
-      productName: embeddedOne<{ name: string }>(row.products)?.name ?? null,
+      productName:
+        priceListNames.get(row.ean) ?? embeddedOne<{ name: string }>(row.products)?.name ?? null,
       locationCode: location?.code ?? "",
       locationName: location?.name ?? "",
       salesUnits: row.sales_units,
