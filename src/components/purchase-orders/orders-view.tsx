@@ -17,6 +17,7 @@ export function OrdersView({ orders }: { orders: readonly PurchaseOrderRow[] }) 
           <TableHeader>
             <TableRow>
               <TableHead>Orden</TableHead>
+              <TableHead>Creada</TableHead>
               <TableHead>Proveedor</TableHead>
               <TableHead>Destino</TableHead>
               <TableHead>Estado</TableHead>
@@ -31,6 +32,9 @@ export function OrdersView({ orders }: { orders: readonly PurchaseOrderRow[] }) 
                   <Link className="font-medium text-primary hover:underline" href={`/orders/${order.id}`}>
                     {order.orderNumber ?? "Borrador"}
                   </Link>
+                </TableCell>
+                <TableCell className="whitespace-nowrap text-muted-foreground">
+                  {formatOrderDate(order.createdAt)}
                 </TableCell>
                 <TableCell>{order.supplierName}</TableCell>
                 <TableCell>{order.locationName}</TableCell>
@@ -55,4 +59,13 @@ export function OrderStatus({ status }: { status: PurchaseOrderRow["status"] }) 
 export function formatCop(value: string) {
   const amount = Number(value);
   return Number.isFinite(amount) ? `$ ${amount.toLocaleString("es-CO", { maximumFractionDigits: 0 })}` : "—";
+}
+
+function formatOrderDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("es-CO", {
+    dateStyle: "medium",
+    timeZone: "America/Bogota",
+  }).format(date);
 }
