@@ -207,7 +207,7 @@ def test_params_hash_cambia_si_cambian_los_dias_objetivo() -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_elegible_por_inventario_sin_precio_vigente_da_status_no_price() -> None:
+def test_producto_del_inventario_ausente_de_lista_no_genera_lineas_de_compra() -> None:
     conn = _conn(
         rec_inventory_lines=[(EAN, CEDI, 5, "801")],
         rec_price_list_items=[],  # sin precio en la lista elegida
@@ -215,17 +215,31 @@ def test_elegible_por_inventario_sin_precio_vigente_da_status_no_price() -> None
     )
     prepared = _run(conn)
 
-    linea = _line_for(prepared, EAN, CEDI)
-    assert linea["status"] == "no_price"
-    assert linea["suggested_quantity"] == 0  # forzada a 0 aunque hubo ventas
-    assert prepared.lines_without_price == len(
-        [loc for loc in conn.rec_locations if loc[3]]
-    )  # una línea sin precio por cada ubicación operativa
+    assert prepared.eligible_product_count == 0
+    assert prepared.lines == []
+    assert prepared.lines_without_price == 0
+
+
+def test_inventario_solo_aporta_stock_de_referencia_a_ean_en_lista() -> None:
+    ean_ausente_de_lista = "7700000000999"
+    conn = _conn(
+        rec_inventory_lines=[
+            (EAN, CEDI, 5, "801"),
+            (ean_ausente_de_lista, CEDI, 99, "801"),
+        ],
+        rec_price_list_items=[(EAN, Decimal("100.00"))],
+        rec_sales_lines=[(EAN, CEDI, 10), (ean_ausente_de_lista, CEDI, 20)],
+    )
+    prepared = _run(conn)
+
+    assert prepared.eligible_product_count == 1
+    assert {line["ean"] for line in prepared.lines} == {EAN}
+    assert _line_for(prepared, EAN, CEDI)["stock_reference"] == 5
 
 
 def test_producto_nuevo_solo_en_lista_de_precios_es_elegible() -> None:
-    """Sin historia TBC (no aparece en inventory_lines): elegible igual, por
-    estar en la lista de precios del proveedor (contrato: agregable a mano)."""
+    """Un producto ausente del inventario sigue siendo elegible si está en la
+    lista de precios vigente del proveedor."""
     conn = _conn(
         rec_inventory_lines=[],  # nada de comodín para este EAN
         rec_price_list_items=[(EAN, Decimal("100.00"))],

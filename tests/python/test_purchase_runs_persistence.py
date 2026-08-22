@@ -87,9 +87,9 @@ def test_todo_o_nada_si_falla_a_mitad_de_camino() -> None:
     assert conn.rollbacks >= 1
 
 
-def test_lines_without_price_se_propaga_del_calculo() -> None:
-    # Elegible por inventario (comodín del proveedor), pero sin precio vigente
-    # en la lista elegida -> todas las líneas quedan 'no_price'.
+def test_inventario_sin_producto_en_lista_persiste_corrida_sin_lineas() -> None:
+    # El comodín del inventario no habilita compras: si el proveedor no incluyó
+    # el EAN en su lista vigente, no se genera ni persiste una línea.
     conn = _conn(
         rec_price_list_items=[],
         rec_inventory_lines=[(EAN, CEDI, 5, "801")],
@@ -97,6 +97,7 @@ def test_lines_without_price_se_propaga_del_calculo() -> None:
     result, prepared = _persist(conn, inventory_snapshot_id="inv-1")
 
     assert result.ok
-    assert prepared.lines_without_price > 0
-    assert result.lines_without_price == prepared.lines_without_price
-    assert result.lines_without_price == result.lines_inserted  # todas sin precio
+    assert prepared.lines == []
+    assert prepared.lines_without_price == 0
+    assert result.lines_without_price == 0
+    assert result.lines_inserted == 0

@@ -14,8 +14,10 @@ Fórmula (cerrada, contrato §1, no admite reinterpretación):
 
 Reglas invariantes:
     - Ventas = 0 en un punto ⇒ sugerencia = 0, sin excepción por inventario.
-    - El inventario (`stock_reference`) es solo referencia: nunca resta, nunca
-      es mínimo, nunca cambia el resultado.
+    - La lista de precios vigente define por sí sola qué EAN son comprables.
+      El inventario (`stock_reference`) es solo referencia para esos EAN:
+      nunca agrega candidatos, nunca resta, nunca es mínimo y nunca cambia el
+      resultado.
     - No existen campos de redistribución, mínimos por quiebre, transferencias
       ni "objetivo de inventario" en este dominio.
     - D1 (Full Mercado Libre): sus ventas se suman a la demanda de CEDI en el
@@ -44,7 +46,8 @@ __all__ = [
 ]
 
 #: `purchase_runs.engine_version`, para reproducibilidad (contrato §6.3).
-ENGINE_VERSION = "3.0.0"
+#: 3.0.1 distingue las corridas cuya elegibilidad depende solo de la lista.
+ENGINE_VERSION = "3.0.1"
 
 #: D2: default de días objetivo por ubicación operativa cuando la corrida no
 #: especifica uno explícito. Heredado de `AnalysisConfig` del MVP viejo.
@@ -89,7 +92,9 @@ def prepare_recommendation(
     """
     locations = _load_locations(conn)
     period_start, period_end, period_days = _load_sales_import(conn, sales_import_id)
-    supplier_tbc_code = _load_supplier_tbc_code(conn, supplier_id)
+    # Conserva la validación de existencia del proveedor, aunque su código TBC
+    # ya no determina los productos comprables.
+    _load_supplier_tbc_code(conn, supplier_id)
     _validate_price_list_supplier(conn, price_list_id, supplier_id)
     if inventory_snapshot_id is not None:
         _require_inventory_snapshot(conn, inventory_snapshot_id)
@@ -98,16 +103,15 @@ def prepare_recommendation(
     resolved_target_days = _resolve_target_days(operative, target_days)
 
     price_by_ean = _load_price_list_items(conn, price_list_id)
-    eligible_from_price = set(price_by_ean)
+    # La lista que entregó el proveedor es la fuente de verdad sobre
+    # disponibilidad. El comodín TBC del inventario sirve para reconciliación,
+    # nunca para agregar productos que el proveedor no incluyó en su lista
+    # vigente.
+    eligible_eans = set(price_by_ean)
 
     stock_by_ean_location: dict[tuple[str, Any], int] = {}
-    eligible_from_inventory: set[str] = set()
     if inventory_snapshot_id is not None:
-        stock_by_ean_location, eligible_from_inventory = _load_inventory(
-            conn, inventory_snapshot_id, supplier_tbc_code
-        )
-
-    eligible_eans = eligible_from_price | eligible_from_inventory
+        stock_by_ean_location = _load_inventory(conn, inventory_snapshot_id)
 
     location_id_by_code = {loc["code"]: loc["id"] for loc in locations.values()}
     cedi_id = location_id_by_code.get("CEDI")
@@ -122,15 +126,12 @@ def prepare_recommendation(
     lines_without_price = 0
     for ean in sorted(eligible_eans):
         unit_cost = price_by_ean.get(ean)
-        status = "ok" if unit_cost is not None else "no_price"
         for loc in operative:
             location_id = loc["id"]
             sales_units = sales_by_ean_location.get((ean, location_id), 0)
             target = resolved_target_days[location_id]
             suggested_quantity = (
-                0
-                if status == "no_price" or sales_units == 0
-                else _ceil_div(sales_units * target, period_days)
+                0 if sales_units == 0 else _ceil_div(sales_units * target, period_days)
             )
             daily_sales = (Decimal(sales_units) / Decimal(period_days)).quantize(
                 Decimal("0.0001"), rounding=ROUND_HALF_UP
@@ -147,11 +148,9 @@ def prepare_recommendation(
                     "final_quantity": suggested_quantity,
                     "stock_reference": stock_by_ean_location.get((ean, location_id)),
                     "unit_cost": unit_cost,
-                    "status": status,
+                    "status": "ok",
                 }
             )
-            if status == "no_price":
-                lines_without_price += 1
 
     target_days_rows = [
         {"location_id": loc["id"], "target_days": resolved_target_days[loc["id"]]}
@@ -322,9 +321,7 @@ def _load_price_list_items(conn: Any, price_list_id: Any) -> dict[str, Decimal]:
     return {row[0]: row[1] for row in rows}
 
 
-def _load_inventory(
-    conn: Any, inventory_snapshot_id: Any, supplier_tbc_code: str | None
-) -> tuple[dict[tuple[str, Any], int], set[str]]:
+def _load_inventory(conn: Any, inventory_snapshot_id: Any) -> dict[tuple[str, Any], int]:
     cursor = conn.cursor()
     try:
         cursor.execute(
@@ -337,12 +334,9 @@ def _load_inventory(
         _close(cursor)
 
     stock: dict[tuple[str, Any], int] = {}
-    eligible: set[str] = set()
-    for ean, location_id, on_hand, row_supplier_code in rows:
+    for ean, location_id, on_hand, _row_supplier_code in rows:
         stock[(ean, location_id)] = on_hand
-        if supplier_tbc_code is not None and row_supplier_code == supplier_tbc_code:
-            eligible.add(ean)
-    return stock, eligible
+    return stock
 
 
 def _load_and_merge_sales(
