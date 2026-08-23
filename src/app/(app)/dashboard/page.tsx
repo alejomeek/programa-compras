@@ -14,29 +14,11 @@ export const dynamic = "force-dynamic";
 
 export default async function Page() {
   const supabase = await createClient();
-  const [{ data: summaryRows, error: summaryError }, { data: recentRows, error: recentError }] = await Promise.all([
-    supabase
-      .from("purchase_orders")
-      .select("status, total_units, subtotal"),
-    supabase
-      .from("purchase_orders")
-      .select("id, order_number, status, total_units, subtotal, created_at, issued_at, cancelled_at, suppliers(name), locations(code, name)")
-      .order("created_at", { ascending: false })
-      .limit(8),
-  ]);
-
-  const summary = (summaryRows ?? []).reduce(
-    (metrics, order) => {
-      if (order.status === "draft") {
-        metrics.draftCount += 1;
-        metrics.pendingUnits += order.total_units;
-        metrics.pendingValue += Number(order.subtotal);
-      }
-      if (order.status === "issued") metrics.issuedCount += 1;
-      return metrics;
-    },
-    { draftCount: 0, pendingUnits: 0, pendingValue: 0, issuedCount: 0 },
-  );
+  const { data: recentRows, error } = await supabase
+    .from("purchase_orders")
+    .select("id, order_number, status, total_units, subtotal, created_at, issued_at, cancelled_at, suppliers(name), locations(code, name)")
+    .order("created_at", { ascending: false })
+    .limit(8);
 
   const recentOrders: PurchaseOrderRow[] = (recentRows ?? []).map((order) => {
     const supplier = embeddedOne<{ name: string }>(order.suppliers);
@@ -56,17 +38,16 @@ export default async function Page() {
     };
   });
 
-  const error = summaryError ?? recentError;
   return (
     <div className="space-y-8">
       <PageHeader
         title="Inicio"
-        description="Resumen de órdenes de compra y pendientes de emisión."
+        description="Órdenes de compra creadas recientemente."
       />
       {error ? (
         <p className="text-sm text-destructive">No se pudo cargar el resumen: {error.message}</p>
       ) : (
-        <DashboardOverview {...summary} recentOrders={recentOrders} />
+        <DashboardOverview recentOrders={recentOrders} />
       )}
     </div>
   );
