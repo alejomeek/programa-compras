@@ -31,6 +31,19 @@ type CostChangeDbRow = {
   tbc_period_end: string;
 };
 
+type SupplierDbRow = {
+  id: string;
+  name: string;
+};
+
+type PriceListDbRow = {
+  id: string;
+  supplier_id: string;
+  version: number;
+  effective_date: string;
+  suppliers: { name: string }[] | null;
+};
+
 type SearchParams = Promise<{
   supplier?: string | string[];
   priceList?: string | string[];
@@ -56,13 +69,24 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
   if (priceListId) changesQuery = changesQuery.eq("price_list_id", priceListId);
   if (tbcSourceId) changesQuery = changesQuery.eq("sales_import_id", tbcSourceId);
 
-  const [{ data, error }, { data: filterData, error: filterError }] = await Promise.all([
+  const [
+    { data, error },
+    { data: sourceData, error: sourceError },
+    { data: supplierData, error: supplierError },
+    { data: priceListData, error: priceListError },
+  ] = await Promise.all([
     changesQuery.limit(500),
     supabase
       .from("cost_changes")
-      .select("supplier_id, supplier_name, price_list_id, price_list_version, effective_date, sales_import_id, tbc_period_end")
-      .order("supplier_name")
+      .select("sales_import_id, tbc_period_end")
       .order("tbc_period_end", { ascending: false })
+      .limit(1000),
+    supabase.from("suppliers").select("id, name").order("name"),
+    supabase
+      .from("price_lists")
+      .select("id, supplier_id, version, effective_date, suppliers(name)")
+      .eq("status", "active")
+      .order("effective_date", { ascending: false })
       .limit(1000),
   ]);
   const changes: CostChangeRow[] = ((data ?? []) as CostChangeDbRow[]).map((row) => ({
@@ -76,15 +100,19 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
     difference: String(row.difference),
     tbcPeriodEnd: row.tbc_period_end,
   }));
-  const supplierOptions = new Map<string, CostChangeSupplierOption>();
-  const priceListOptions = new Map<string, CostChangePriceListOption>();
+  const supplierOptions: CostChangeSupplierOption[] = ((supplierData ?? []) as SupplierDbRow[])
+    .map((supplier) => ({ id: supplier.id, name: supplier.name }));
+  const priceListOptions = ((priceListData ?? []) as PriceListDbRow[])
+    .filter((priceList) => !supplierId || priceList.supplier_id === supplierId)
+    .map((priceList) => ({
+      id: priceList.id,
+      label: `${priceList.suppliers?.[0]?.name ?? "Proveedor"} · lista v${priceList.version} · vigente desde ${priceList.effective_date}`,
+    } satisfies CostChangePriceListOption));
   const sourceOptions = new Map<string, CostChangeSourceOption>();
-  for (const row of (filterData ?? []) as Pick<CostChangeDbRow, "supplier_id" | "supplier_name" | "price_list_id" | "price_list_version" | "effective_date" | "sales_import_id" | "tbc_period_end">[]) {
-    supplierOptions.set(row.supplier_id, { id: row.supplier_id, name: row.supplier_name });
-    priceListOptions.set(row.price_list_id, { id: row.price_list_id, label: `${row.supplier_name} · lista v${row.price_list_version} · vigente desde ${row.effective_date}` });
+  for (const row of (sourceData ?? []) as Pick<CostChangeDbRow, "sales_import_id" | "tbc_period_end">[]) {
     sourceOptions.set(row.sales_import_id, { id: row.sales_import_id, label: `TBC · período hasta ${row.tbc_period_end}` });
   }
-  const filtersError = error ?? filterError;
+  const filtersError = error ?? sourceError ?? supplierError ?? priceListError;
 
   return (
     <div className="space-y-8">
@@ -97,8 +125,8 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
       ) : (
         <>
           <CostChangesFilters
-            suppliers={[...supplierOptions.values()]}
-            priceLists={[...priceListOptions.values()]}
+            suppliers={supplierOptions}
+            priceLists={priceListOptions}
             tbcSources={[...sourceOptions.values()]}
             selectedSupplierId={supplierId}
             selectedPriceListId={priceListId}

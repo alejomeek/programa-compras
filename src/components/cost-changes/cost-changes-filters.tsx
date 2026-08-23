@@ -1,5 +1,8 @@
+"use client";
+
 import Form from "next/form";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 
@@ -40,7 +43,18 @@ export function CostChangesFilters({
   selectedPriceListId,
   selectedTbcSourceId,
 }: CostChangesFiltersProps) {
+  const router = useRouter();
   const hasFilters = selectedSupplierId !== null || selectedPriceListId !== null || selectedTbcSourceId !== null;
+
+  function changeSupplier(nextSupplierId: string) {
+    const params = new URLSearchParams();
+    if (nextSupplierId) params.set("supplier", nextSupplierId);
+    // La fuente TBC no depende del proveedor; la lista sí y se descarta para
+    // que nunca se conserve una lista de otro proveedor en la URL.
+    if (selectedTbcSourceId) params.set("tbcSource", selectedTbcSourceId);
+    const query = params.toString();
+    router.replace(query ? `/cost-changes?${query}` : "/cost-changes", { scroll: false });
+  }
 
   return (
     <Form action="/cost-changes" className="flex flex-wrap items-end gap-3">
@@ -49,6 +63,7 @@ export function CostChangesFilters({
         <select
           name="supplier"
           defaultValue={selectedSupplierId ?? ""}
+          onChange={(event) => changeSupplier(event.target.value)}
           className="h-9 min-w-52 rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
           <option value="">Todos los proveedores</option>
