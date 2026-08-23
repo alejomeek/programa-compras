@@ -33,7 +33,7 @@ export function normalizeRole(value: unknown): Role {
   return isRole(value) ? value : DEFAULT_ROLE;
 }
 
-/** Administracion: usuarios, ubicaciones, dias objetivo por defecto (contrato §10.2, ruta `/settings`). */
+/** Administración de operaciones restringidas, como la creación de proveedores. */
 export function isAdmin(role: Role): boolean {
   return role === "admin";
 }

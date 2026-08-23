@@ -28,8 +28,8 @@ export function AccountInactive({ fullName }: { fullName: string }) {
             está marcada como inactiva, así que no puede entrar al Programa de Compras.
           </p>
           <p>
-            Si crees que es un error, pide a quien administra el sistema que vuelva a activarla desde
-            Configuración.
+            Si crees que es un error, contacta a quien administra la plataforma para que vuelva a
+            activarla.
           </p>
           <form action="/auth/signout" method="post">
             <Button type="submit" variant="outline">

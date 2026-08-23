@@ -60,7 +60,7 @@ const ISSUE_COPY: Record<IssueCode, IssueCopy> = {
   tisuc_desconocido: {
     title: "Punto de venta desconocido",
     action:
-      "El archivo trae un código de ubicación (TISUC) que no está en el catálogo, así que sus unidades no se sumaron a ningún punto. Pide a un administrador que dé de alta esa ubicación en Configuración, o confirma que debe ignorarse.",
+      "El archivo trae un código de ubicación (TISUC) que no está en el catálogo, así que sus unidades no se sumaron a ningún punto. Pide al responsable de los datos que valide la ubicación, o confirma que debe ignorarse.",
   },
 };
 

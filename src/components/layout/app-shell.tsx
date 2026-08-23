@@ -12,16 +12,14 @@ import type { SessionUser } from "@/types/profile";
  *  - >= md: `<aside>` fijo de 240px, superficie blanca y borde derecho.
  *  - <  md: sidebar oculto y barra superior con boton que abre el `Sheet`.
  *
- * Las entradas de menu se calculan EN SERVIDOR a partir del rol del perfil,
- * asi que "Configuración" ni siquiera se envia al navegador para quien no es
- * admin. Aun asi, `/settings` revalida el rol por su cuenta: ocultar un enlace
- * no protege una ruta.
+ * Las entradas de menú se resuelven en servidor antes de cruzar el límite hacia
+ * los componentes de navegación del cliente.
  */
 export function AppShell({ user, children }: { user: SessionUser; children: ReactNode }) {
   // El icono se resuelve a elemento AQUI, en servidor: `SidebarNav`/`MobileNav`
   // son Client Components y no pueden recibir la referencia al componente del
   // icono como prop (no es serializable), solo el elemento ya renderizado.
-  const items: NavLinkItem[] = navItemsForRole(user.profile.role).map((item) => ({
+  const items: NavLinkItem[] = navItemsForRole().map((item) => ({
     href: item.href,
     label: item.label,
     icon: <item.icon aria-hidden="true" className="size-4 shrink-0" />,

@@ -7,9 +7,9 @@ import { getSupabaseEnv, MissingEnvError } from "@/lib/env";
  * Refresca el token de Supabase y reescribe las cookies en la respuesta.
  *
  * OJO CON EL ALCANCE: este helper NO decide si una ruta es accesible. La
- * decision de autorizacion vive en `src/app/(app)/layout.tsx` (servidor) y,
- * para `/settings`, se revalida ademas en la propia pagina. El middleware solo
- * mantiene viva la sesion, que es justamente lo que Supabase recomienda.
+ * decisión de autorización vive en `src/app/(app)/layout.tsx` (servidor). El
+ * middleware solo mantiene viva la sesión, que es justamente lo que Supabase
+ * recomienda.
  */
 export async function updateSession(request: NextRequest) {
   const response = NextResponse.next({ request });

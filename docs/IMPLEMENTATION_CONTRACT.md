@@ -286,14 +286,12 @@ Implementación propuesta: `app/globals.css` único con `@import "tailwindcss"`,
 | `/purchase-runs/[id]` | **Vista central**: tabla virtualizada producto × ubicación, filtros pegajosos, cantidad final editable inline, motivo de ajuste, creación de borradores de orden | `purchase_run_lines`, `purchase_line_adjustments`, `latest_supplier_prices`, `inventory_lines` (referencia) |
 | `/orders` | Borradores/emitidas/canceladas, emisión con confirmación, PDF por URL firmada | `purchase_orders`, `purchase_order_items`, `audit_events` |
 | `/cost-changes` | Comparación costo proveedor vs. TBC, sin tolerancia | vista `cost_changes` |
-| `/catalog` | Productos nuevos / descontinuados / problemas de EAN-archivo | `products`, `supplier_products`, `import_issues` |
-| `/settings` | Solo `admin`: ubicaciones, días objetivo por defecto, usuarios/roles | `locations`, `profiles` |
 
 Componentes transversales sugeridos en `components/`: `PageHeader`, `KpiCard`, `DataTable` (filtros pegajosos + orden + virtualización), `EditableQuantityCell`, `StatusBadge`, `FileDropzone`, `IssueList`, `EmptyState`, `ConfirmDialog`.
 
 ### 10.3 Layout / sidebar
 
-El sidebar del OMS es **fijo, sin comportamiento móvil** (240px siempre visible) — el drawer/`Sheet` en móvil que exige el plan **se diseña nuevo**, no se deriva del OMS. Estructura propuesta: `<aside>` de 240px con superficie blanca y borde derecho — cabecera con logo (~36px, radio 8px) + nombre de la app; navegación con 9 items (icono Lucide 16px + label), estado activo con fondo `primary` + texto `primary-foreground` + `aria-current="page"` (no solo color); pie con indicador de conexión, usuario/rol y logout. Bajo `md` (768px): sidebar oculto, barra superior con botón que abre `Sheet` con el mismo árbol de navegación (componente `SidebarNav` compartido para no duplicar).
+El sidebar del OMS es **fijo, sin comportamiento móvil** (240px siempre visible) — el drawer/`Sheet` en móvil que exige el plan **se diseña nuevo**, no se deriva del OMS. Estructura propuesta: `<aside>` de 240px con superficie blanca y borde derecho — cabecera con logo (~36px, radio 8px) + nombre de la app; navegación con 6 items operativos (icono Lucide 16px + label), estado activo con fondo `primary` + texto `primary-foreground` + `aria-current="page"` (no solo color); pie con indicador de conexión, usuario/rol y logout. Bajo `md` (768px): sidebar oculto, barra superior con botón que abre `Sheet` con el mismo árbol de navegación (componente `SidebarNav` compartido para no duplicar).
 
 Primitives shadcn/ui sugeridas: `Button`/`Link` para nav, `Separator`, `Sheet` para el drawer móvil, `Avatar`+`DropdownMenu` para perfil, `Card`/`Skeleton` para KPIs, `Table` + TanStack Table (+ TanStack Virtual en `/purchase-runs/[id]`), `Input`/`Select`/`Popover`+`Command`/`Checkbox`/`Tabs`/`Badge` para filtros, `Form` (react-hook-form + zod) para formularios, `AlertDialog` para confirmaciones destructivas/emisión, `Sonner` para toasts, `Tooltip` (nunca como único portador de información).
 
@@ -347,7 +345,7 @@ Con este contrato publicado, la Fase 0 quedó cerrada. El usuario decidió abrir
 `web-foundation`, `db-auth` y `engine-core` entregaron y el lead verificó de forma independiente (`npm run lint`, `npm run typecheck`, `npm test`, `npm run build`, `python -m pytest tests/python`, más un smoke test con `next start` real). Resumen:
 
 - **Next.js scaffold** (lead): inicializado, Tailwind v4 + App Router + TypeScript.
-- **`web-foundation`**: shadcn/ui instalado (CLI v3 usa el paquete unificado `radix-ui` en vez de `@radix-ui/react-*` sueltos), clientes Supabase browser/server, `src/proxy.ts` (renombrado desde `middleware.ts` por deprecación en Next 16.3.1), layout `(app)`/`(auth)`, sidebar de 8 items + `Sheet` móvil, 9 rutas vacías, pantalla "app no configurada" sin env vars, pantalla `AccountInactive` para `profiles.active = false` (barrera de UI, no de datos), tema con los tokens corregidos por contraste de §10.1. 17 pruebas Vitest.
+- **`web-foundation`**: shadcn/ui instalado (CLI v3 usa el paquete unificado `radix-ui` en vez de `@radix-ui/react-*` sueltos), clientes Supabase browser/server, `src/proxy.ts` (renombrado desde `middleware.ts` por deprecación en Next 16.3.1), layout `(app)`/`(auth)`, sidebar de 6 items + `Sheet` móvil, pantalla "app no configurada" sin env vars, pantalla `AccountInactive` para `profiles.active = false` (barrera de UI, no de datos), tema con los tokens corregidos por contraste de §10.1. 17 pruebas Vitest.
 - **`db-auth`**: `supabase/migrations/0001..0005` + `supabase/seed.sql`. Corrigió dos erratas del contrato antes de escribir código: el helper se llama `current_user_role()` (no `current_role()`, que es palabra reservada en Postgres) y las 9 `locations` se insertan de forma idempotente dentro de `0003_locations.sql` (no solo en `seed.sql`, que no corre en producción). Validado con 49 pruebas de comportamiento contra un contenedor Postgres **efímero y descartado** (no el proyecto Supabase del usuario).
 - **`engine-core`**: `engine/readers.py` y `engine/validation.py`, 154 pruebas pytest con fixtures 100% sintéticas. Corrigió un bug real del motor viejo en el parseo numérico es-CO (`to_number`): un precio como `"45.900"` sin coma se leía como `45.9` (mil veces menor); ahora el punto solo se trata como separador de miles cuando el texto calza el patrón de agrupación `^\d{1,3}(\.\d{3})+$`.
 
@@ -358,8 +356,8 @@ Nadie ha iniciado sesión todavía contra un backend real — es trabajo humano,
 1. Crear el proyecto Supabase de desarrollo (`compras-dev`) y aplicar `supabase/migrations/0001..0005` en orden.
 2. Copiar `.env.example` a `.env.local` y completar `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` del proyecto (nunca pegar esos valores en el chat).
 3. Registrar un usuario en la app y promoverlo a `admin` con el `UPDATE` documentado al final de `supabase/seed.sql`.
-4. Confirmar que ese usuario ve sidebar completo (incluida Configuración) y que un usuario sin promover ve el sidebar sin Configuración — es el criterio de salida real del plan §12 Fase 0/runbook Fase 1.
-5. Opcional: correr `supabase/seed.sql` para tener proveedores/productos ficticios de prueba en `/catalog` cuando exista esa UI (Fase 2).
+4. Confirmar que ese usuario ve la navegación y puede entrar a las rutas operativas — es el criterio de salida real del plan §12 Fase 0/runbook Fase 1.
+5. Opcional: correr `supabase/seed.sql` para tener proveedores y productos ficticios de prueba durante la carga de archivos y corridas.
 
 ### Riesgos abiertos que quedan para cuando exista esa instancia real
 

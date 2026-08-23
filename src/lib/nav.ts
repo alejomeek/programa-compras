@@ -5,13 +5,10 @@ import {
   Building2,
   FileText,
   LayoutDashboard,
-  Settings,
   ShoppingCart,
   Upload,
 } from "lucide-react";
 
-import { isAdmin } from "@/lib/auth/roles";
-import type { Role } from "@/types/profile";
 
 /**
  * Definicion unica de la navegacion principal.
@@ -25,8 +22,6 @@ export type NavItem = {
   href: string;
   label: string;
   icon: LucideIcon;
-  /** Visible solo para `admin`. La UI oculta; RLS es quien autoriza de verdad. */
-  adminOnly?: boolean;
 };
 
 export const NAV_ITEMS: readonly NavItem[] = [
@@ -36,12 +31,11 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: "/purchase-runs", label: "Compras sugeridas", icon: ShoppingCart },
   { href: "/orders", label: "Órdenes de compra", icon: FileText },
   { href: "/cost-changes", label: "Cambios de costo", icon: ArrowLeftRight },
-  { href: "/settings", label: "Configuración", icon: Settings, adminOnly: true },
 ] as const;
 
-/** Entradas visibles para un rol. `admin` las ve todas; el resto pierde las `adminOnly`. */
-export function navItemsForRole(role: Role): NavItem[] {
-  return NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin(role));
+/** Todas las entradas actuales están disponibles para cualquier usuario activo. */
+export function navItemsForRole(): NavItem[] {
+  return [...NAV_ITEMS];
 }
 
 /**

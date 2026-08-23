@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import { NAV_ITEMS, isNavItemActive, navItemsForRole } from "@/lib/nav";
 
 describe("NAV_ITEMS", () => {
-  it("tiene las 7 entradas de menú activas", () => {
-    expect(NAV_ITEMS).toHaveLength(7);
+  it("tiene las 6 entradas de menú activas", () => {
+    expect(NAV_ITEMS).toHaveLength(6);
     expect(NAV_ITEMS.map((item) => item.href)).toEqual([
       "/dashboard",
       "/suppliers",
@@ -12,7 +12,6 @@ describe("NAV_ITEMS", () => {
       "/purchase-runs",
       "/orders",
       "/cost-changes",
-      "/settings",
     ]);
   });
 
@@ -21,27 +20,15 @@ describe("NAV_ITEMS", () => {
     expect(new Set(NAV_ITEMS.map((i) => i.label)).size).toBe(NAV_ITEMS.length);
   });
 
-  it("marca como adminOnly unicamente Configuracion", () => {
-    const adminOnly = NAV_ITEMS.filter((item) => item.adminOnly);
-    expect(adminOnly.map((item) => item.href)).toEqual(["/settings"]);
-  });
 });
 
 describe("navItemsForRole", () => {
-  it("admin ve las 7 entradas", () => {
-    expect(navItemsForRole("admin")).toHaveLength(7);
-  });
-
-  it("buyer y viewer no ven Configuracion", () => {
-    for (const role of ["buyer", "viewer"] as const) {
-      const hrefs = navItemsForRole(role).map((item) => item.href);
-      expect(hrefs).toHaveLength(6);
-      expect(hrefs).not.toContain("/settings");
-    }
+  it("devuelve las 6 entradas operativas", () => {
+    expect(navItemsForRole()).toHaveLength(6);
   });
 
   it("solo filtra: conserva el orden del menu", () => {
-    const hrefs = navItemsForRole("viewer").map((item) => item.href);
+    const hrefs = navItemsForRole().map((item) => item.href);
     expect(hrefs).toEqual([
       "/dashboard",
       "/suppliers",
