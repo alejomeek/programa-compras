@@ -77,7 +77,7 @@ docker cp "$ROOT/supabase" "$CONTAINER:/tmp/supabase" >/dev/null
 
 total_pass=0
 total_fail=0
-for suite in "$ROOT"/supabase/tests/sql/[0-9][0-9]_*.sql; do
+for suite in "$ROOT"/supabase/tests/sql/[0-9]*_*.sql; do
   name="$(basename "$suite")"
   case "$name" in 00_helpers.sql|01_fixtures.sql) continue ;; esac
   out="$(docker exec -i "$CONTAINER" psql -U postgres -q < "$suite" 2>&1 | grep -E 'PASS |FAIL |^ERROR' || true)"
