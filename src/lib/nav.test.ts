@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import { NAV_ITEMS, isNavItemActive, navItemsForRole } from "@/lib/nav";
 
 describe("NAV_ITEMS", () => {
-  it("tiene las 8 entradas de menu del contrato §10.2", () => {
-    expect(NAV_ITEMS).toHaveLength(8);
+  it("tiene las 7 entradas de menú activas", () => {
+    expect(NAV_ITEMS).toHaveLength(7);
     expect(NAV_ITEMS.map((item) => item.href)).toEqual([
       "/dashboard",
       "/suppliers",
@@ -12,7 +12,6 @@ describe("NAV_ITEMS", () => {
       "/purchase-runs",
       "/orders",
       "/cost-changes",
-      "/catalog",
       "/settings",
     ]);
   });
@@ -29,14 +28,14 @@ describe("NAV_ITEMS", () => {
 });
 
 describe("navItemsForRole", () => {
-  it("admin ve las 8 entradas", () => {
-    expect(navItemsForRole("admin")).toHaveLength(8);
+  it("admin ve las 7 entradas", () => {
+    expect(navItemsForRole("admin")).toHaveLength(7);
   });
 
   it("buyer y viewer no ven Configuracion", () => {
     for (const role of ["buyer", "viewer"] as const) {
       const hrefs = navItemsForRole(role).map((item) => item.href);
-      expect(hrefs).toHaveLength(7);
+      expect(hrefs).toHaveLength(6);
       expect(hrefs).not.toContain("/settings");
     }
   });
@@ -50,7 +49,6 @@ describe("navItemsForRole", () => {
       "/purchase-runs",
       "/orders",
       "/cost-changes",
-      "/catalog",
     ]);
   });
 });
@@ -73,6 +71,6 @@ describe("isNavItemActive", () => {
 
   it("respeta el limite de segmento y no activa por prefijo de texto", () => {
     expect(isNavItemActive("/orders", "/orders-archive")).toBe(false);
-    expect(isNavItemActive("/catalog", "/catalogo")).toBe(false);
+    expect(isNavItemActive("/cost-changes", "/cost-changes-history")).toBe(false);
   });
 });

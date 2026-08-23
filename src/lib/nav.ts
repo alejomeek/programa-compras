@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   ArrowLeftRight,
-  BookOpen,
   Building2,
   FileText,
   LayoutDashboard,
@@ -20,8 +19,7 @@ import type { Role } from "@/types/profile";
  * La comparte el sidebar de escritorio y el `Sheet` movil para que el arbol de
  * navegacion no se duplique (docs/IMPLEMENTATION_CONTRACT.md §10.3).
  *
- * Son 8 entradas de menu sobre 9 rutas: la novena, `/purchase-runs/[id]`, es
- * la vista de detalle de una corrida y no aparece en el menu.
+ * Las rutas de detalle, como `/purchase-runs/[id]`, no aparecen en el menú.
  */
 export type NavItem = {
   href: string;
@@ -38,7 +36,6 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: "/purchase-runs", label: "Compras sugeridas", icon: ShoppingCart },
   { href: "/orders", label: "Órdenes de compra", icon: FileText },
   { href: "/cost-changes", label: "Cambios de costo", icon: ArrowLeftRight },
-  { href: "/catalog", label: "Catálogo", icon: BookOpen },
   { href: "/settings", label: "Configuración", icon: Settings, adminOnly: true },
 ] as const;
 

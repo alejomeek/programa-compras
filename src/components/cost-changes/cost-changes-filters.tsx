@@ -13,10 +13,17 @@ export type CostChangeSourceOption = {
   label: string;
 };
 
+export type CostChangePriceListOption = {
+  id: string;
+  label: string;
+};
+
 type CostChangesFiltersProps = {
   suppliers: readonly CostChangeSupplierOption[];
+  priceLists: readonly CostChangePriceListOption[];
   tbcSources: readonly CostChangeSourceOption[];
   selectedSupplierId: string | null;
+  selectedPriceListId: string | null;
   selectedTbcSourceId: string | null;
 };
 
@@ -27,11 +34,13 @@ type CostChangesFiltersProps = {
  */
 export function CostChangesFilters({
   suppliers,
+  priceLists,
   tbcSources,
   selectedSupplierId,
+  selectedPriceListId,
   selectedTbcSourceId,
 }: CostChangesFiltersProps) {
-  const hasFilters = selectedSupplierId !== null || selectedTbcSourceId !== null;
+  const hasFilters = selectedSupplierId !== null || selectedPriceListId !== null || selectedTbcSourceId !== null;
 
   return (
     <Form action="/cost-changes" className="flex flex-wrap items-end gap-3">
@@ -45,6 +54,19 @@ export function CostChangesFilters({
           <option value="">Todos los proveedores</option>
           {suppliers.map((supplier) => (
             <option key={supplier.id} value={supplier.id}>{supplier.name}</option>
+          ))}
+        </select>
+      </label>
+      <label className="grid gap-1.5 text-sm font-medium text-foreground">
+        Lista de precios
+        <select
+          name="priceList"
+          defaultValue={selectedPriceListId ?? ""}
+          className="h-9 min-w-60 rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        >
+          <option value="">Todas las listas vigentes</option>
+          {priceLists.map((priceList) => (
+            <option key={priceList.id} value={priceList.id}>{priceList.label}</option>
           ))}
         </select>
       </label>
