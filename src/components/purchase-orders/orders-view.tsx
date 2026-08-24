@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
@@ -10,19 +10,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import type { PurchaseOrderRow } from "@/app/(app)/orders/types";
 
 export function OrdersView({ orders }: { orders: readonly PurchaseOrderRow[] }) {
-  const selectableOrders = useMemo(() => orders.filter((order) => order.status === "issued"), [orders]);
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
-  const selectAllRef = useRef<HTMLInputElement>(null);
 
   const selectedCount = selectedIds.size;
-  const allVisibleSelected = selectableOrders.length > 0 && selectedCount === selectableOrders.length;
-  const partiallySelected = selectedCount > 0 && !allVisibleSelected;
-
-  useEffect(() => {
-    if (selectAllRef.current) selectAllRef.current.indeterminate = partiallySelected;
-  }, [partiallySelected]);
 
   function toggleOrder(orderId: string, selected: boolean) {
     setSelectedIds((previous) => {
@@ -31,10 +23,6 @@ export function OrdersView({ orders }: { orders: readonly PurchaseOrderRow[] }) 
       else next.delete(orderId);
       return next;
     });
-  }
-
-  function toggleAllVisible(selected: boolean) {
-    setSelectedIds(selected ? new Set(selectableOrders.map((order) => order.id)) : new Set());
   }
 
   async function downloadZip() {
@@ -84,17 +72,7 @@ export function OrdersView({ orders }: { orders: readonly PurchaseOrderRow[] }) 
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-12">
-                <input
-                  ref={selectAllRef}
-                  type="checkbox"
-                  checked={allVisibleSelected}
-                  disabled={selectableOrders.length === 0}
-                  aria-label="Seleccionar todas las órdenes emitidas visibles"
-                  onChange={(event) => toggleAllVisible(event.target.checked)}
-                  className="size-4 rounded border-input align-middle accent-primary"
-                />
-              </TableHead>
+              <TableHead className="w-9"><span className="sr-only">Seleccionar</span></TableHead>
               <TableHead>Orden</TableHead>
               <TableHead>Creada</TableHead>
               <TableHead>Proveedor</TableHead>
@@ -114,7 +92,7 @@ export function OrdersView({ orders }: { orders: readonly PurchaseOrderRow[] }) 
                       checked={selectedIds.has(order.id)}
                       aria-label={`Seleccionar ${order.orderNumber ?? "orden emitida"}`}
                       onChange={(event) => toggleOrder(order.id, event.target.checked)}
-                      className="size-4 rounded border-input align-middle accent-primary"
+                      className="size-3 rounded border-input align-middle accent-primary"
                     />
                   ) : null}
                 </TableCell>
