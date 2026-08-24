@@ -1,21 +1,100 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { PurchaseOrderRow } from "@/app/(app)/orders/types";
 
 export function OrdersView({ orders }: { orders: readonly PurchaseOrderRow[] }) {
+  const selectableOrders = useMemo(() => orders.filter((order) => order.status === "issued"), [orders]);
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const selectAllRef = useRef<HTMLInputElement>(null);
+
+  const selectedCount = selectedIds.size;
+  const allVisibleSelected = selectableOrders.length > 0 && selectedCount === selectableOrders.length;
+  const partiallySelected = selectedCount > 0 && !allVisibleSelected;
+
+  useEffect(() => {
+    if (selectAllRef.current) selectAllRef.current.indeterminate = partiallySelected;
+  }, [partiallySelected]);
+
+  function toggleOrder(orderId: string, selected: boolean) {
+    setSelectedIds((previous) => {
+      const next = new Set(previous);
+      if (selected) next.add(orderId);
+      else next.delete(orderId);
+      return next;
+    });
+  }
+
+  function toggleAllVisible(selected: boolean) {
+    setSelectedIds(selected ? new Set(selectableOrders.map((order) => order.id)) : new Set());
+  }
+
+  async function downloadZip() {
+    if (selectedCount === 0 || downloading) return;
+    setDownloading(true);
+    setDownloadError(null);
+    try {
+      const response = await fetch("/api/purchase-orders/download-zip", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ orderIds: [...selectedIds] }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({})) as { error?: string };
+        throw new Error(body.error ?? "No se pudo preparar el archivo ZIP.");
+      }
+      const blob = await response.blob();
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = "ordenes-de-compra.zip";
+      document.body.append(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      setDownloadError(error instanceof Error ? error.message : "No se pudo preparar el archivo ZIP.");
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   if (orders.length === 0) {
     return <EmptyState title="Aún no hay órdenes" description="Selecciona líneas con cantidad final positiva en una corrida para crear borradores por ubicación." />;
   }
 
   return (
-    <Card>
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        {downloadError ? <p role="alert" className="text-sm text-destructive">{downloadError}</p> : null}
+        <Button type="button" disabled={selectedCount === 0 || downloading} onClick={() => void downloadZip()}>
+          {downloading ? "Preparando ZIP…" : `Descargar ZIP (${selectedCount})`}
+        </Button>
+      </div>
+      <Card>
       <CardContent className="p-0">
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-12">
+                <input
+                  ref={selectAllRef}
+                  type="checkbox"
+                  checked={allVisibleSelected}
+                  disabled={selectableOrders.length === 0}
+                  aria-label="Seleccionar todas las órdenes emitidas visibles"
+                  onChange={(event) => toggleAllVisible(event.target.checked)}
+                  className="size-4 rounded border-input align-middle accent-primary"
+                />
+              </TableHead>
               <TableHead>Orden</TableHead>
               <TableHead>Creada</TableHead>
               <TableHead>Proveedor</TableHead>
@@ -28,6 +107,17 @@ export function OrdersView({ orders }: { orders: readonly PurchaseOrderRow[] }) 
           <TableBody>
             {orders.map((order) => (
               <TableRow key={order.id}>
+                <TableCell>
+                  {order.status === "issued" ? (
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(order.id)}
+                      aria-label={`Seleccionar ${order.orderNumber ?? "orden emitida"}`}
+                      onChange={(event) => toggleOrder(order.id, event.target.checked)}
+                      className="size-4 rounded border-input align-middle accent-primary"
+                    />
+                  ) : null}
+                </TableCell>
                 <TableCell>
                   <Link className="font-medium text-primary hover:underline" href={`/orders/${order.id}`}>
                     {order.orderNumber ?? "Borrador"}
@@ -46,7 +136,8 @@ export function OrdersView({ orders }: { orders: readonly PurchaseOrderRow[] }) 
           </TableBody>
         </Table>
       </CardContent>
-    </Card>
+      </Card>
+    </div>
   );
 }
 

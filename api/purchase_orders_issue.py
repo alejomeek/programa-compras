@@ -88,19 +88,11 @@ def _process(payload: dict[str, Any], *, connect: Callable[[], Any] = _connectio
                 conn.rollback()
                 return 422, {"error": "La orden debe tener al menos una línea antes de emitirse."}
 
-            year = date.today().year
             cursor.execute(
-                """
-                insert into purchase_order_counters (order_year, last_value)
-                values (%s, 1)
-                on conflict (order_year) do update
-                  set last_value = purchase_order_counters.last_value + 1
-                returning last_value
-                """,
-                (year,),
+                "select nextval('public.purchase_order_number_sequence')",
             )
             serial = cursor.fetchone()[0]
-            order_number = f"OC-{year}-{order[6]}-{serial:04d}"
+            order_number = _format_order_number(order[6], serial)
             items = [
                 {"ean": row[0], "product_name": row[1], "quantity": row[2], "unit_cost": row[3]}
                 for row in item_rows
@@ -172,6 +164,11 @@ def _upload_pdf(object_path: str, pdf: bytes) -> None:
     except HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
         raise RuntimeError(f"Storage rechazó el PDF ({exc.code}): {detail}") from exc
+
+
+def _format_order_number(location_code: str, serial: int) -> str:
+    """Formato visible de órdenes nuevas; la secuencia ya es global en SQL."""
+    return f"OC-{location_code}-{serial:04d}"
 
 
 def _delete_pdf(object_path: str) -> None:

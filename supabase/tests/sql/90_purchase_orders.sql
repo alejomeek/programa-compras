@@ -34,7 +34,7 @@ select test.expect_true('H01 snapshot de item y totales presentes',
   $$select count(*) = 0 from information_schema.columns
     where table_schema = 'public' and table_name in ('purchase_orders', 'purchase_order_items')
       and column_name = any(array['tax_amount','freight_amount','total_with_tax'])$$);
-select test.expect_true('H02 order_number incorpora año, ubicación y serial',
+select test.expect_true('H02 order_number conserva números históricos y admite el formato nuevo',
   $$select exists(select 1 from pg_constraint where conname = 'purchase_orders_order_number_check')$$);
 
 -- Viewer lee, pero no crea. La excepción de negocio solo aplica a cancelar.
@@ -78,8 +78,8 @@ select test.expect_ok('H08 buyer emite con PDF válido',
   $$select public.issue_purchase_order(
       (select id from public.purchase_orders where purchase_run_id = '11119999-0000-0000-0000-000000000010'),
       'cccccccc-0000-0000-0000-000000000010')$$);
-select test.expect_true('H09 emisión asigna número con destino CEDI y congela PDF',
-  $$select status = 'issued' and order_number ~ '^OC-[0-9]{4}-CEDI-0001$'
+select test.expect_true('H09 emisión asigna número sin año, con destino y congela PDF',
+  $$select status = 'issued' and order_number ~ '^OC-CEDI-0001$'
       and pdf_file_id = 'cccccccc-0000-0000-0000-000000000010'
     from public.purchase_orders where purchase_run_id = '11119999-0000-0000-0000-000000000010'$$);
 reset role;
