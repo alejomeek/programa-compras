@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { PackageSearch } from "lucide-react";
 
 import { EmptyState } from "@/components/empty-state";
+import { StatusBadge } from "@/components/status-badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -223,6 +224,9 @@ function LineRow({
         >
           {line.ean}
         </span>
+        {line.tbcCatalogStatus === "not_found" ? (
+          <StatusBadge label="No existe en TBC" tone="warning" className="mt-1" />
+        ) : null}
       </TableCell>
       <TableCell className="whitespace-nowrap">{line.locationName}</TableCell>
       <TableCell className="whitespace-nowrap">{line.salesUnits}</TableCell>

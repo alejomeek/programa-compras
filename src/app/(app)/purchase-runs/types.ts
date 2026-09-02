@@ -6,6 +6,7 @@
  */
 
 import type { PurchaseRunStatus, PurchaseRunLineStatus } from "./run-status";
+import type { TbcCatalogStatus } from "@/lib/purchase-runs/tbc-catalog";
 
 export type PurchaseRunRow = {
   id: string;
@@ -47,6 +48,8 @@ export type PurchaseRunLineRow = {
   id: string;
   ean: string;
   productName: string | null;
+  /** Presencia actual del EAN en el último catálogo SDOSXSUC activo. */
+  tbcCatalogStatus: TbcCatalogStatus;
   locationCode: string;
   locationName: string;
   salesUnits: number;

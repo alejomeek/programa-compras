@@ -6,6 +6,7 @@ import { PurchaseRunDetailView } from "@/components/purchase-runs/purchase-run-d
 import { createClient } from "@/lib/supabase/server";
 import { embeddedOne } from "@/lib/supabase/relations";
 import { productNamesByEan } from "@/lib/purchase-runs/product-names";
+import { tbcCatalogStatusForEan } from "@/lib/purchase-runs/tbc-catalog";
 import { getSessionUser } from "@/lib/auth/session";
 import { canWrite } from "@/lib/auth/roles";
 import type {
@@ -91,14 +92,35 @@ export default async function PurchaseRunDetailPage({
   // lista de precios de esta corrida sí conserva el nombre provisto por el
   // proveedor, incluso para corridas históricas.
   const lineEans = [...new Set((linesData ?? []).map((row) => row.ean))];
-  const { data: priceListItems } = lineEans.length
-    ? await supabase
-        .from("price_list_items")
-        .select("ean, raw")
-        .eq("price_list_id", run.price_list_id)
-        .in("ean", lineEans)
-    : { data: [] };
+  const [{ data: priceListItems }, { data: latestTbcSnapshot }] = await Promise.all([
+    lineEans.length
+      ? supabase
+          .from("price_list_items")
+          .select("ean, raw")
+          .eq("price_list_id", run.price_list_id)
+          .in("ean", lineEans)
+      : Promise.resolve({ data: [] }),
+    supabase
+      .from("inventory_snapshots")
+      .select("id")
+      .eq("status", "active")
+      .order("snapshot_date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
   const priceListNames = productNamesByEan(priceListItems ?? []);
+  // SDOSXSUC contiene el catálogo TBC completo, incluso EAN con existencia
+  // cero. Solo afirmamos "No existe en TBC" si hay una fotografía vigente.
+  let tbcCatalogEans: ReadonlySet<string> | null = null;
+  if (latestTbcSnapshot && lineEans.length) {
+    const { data: tbcCatalogLines, error: tbcCatalogError } = await supabase
+      .from("inventory_lines")
+      .select("ean")
+      .eq("snapshot_id", latestTbcSnapshot.id)
+      .in("ean", lineEans);
+    if (!tbcCatalogError) tbcCatalogEans = new Set((tbcCatalogLines ?? []).map((item) => item.ean));
+  }
 
   const detail: PurchaseRunDetail = {
     id: run.id,
@@ -124,6 +146,7 @@ export default async function PurchaseRunDetailPage({
       ean: row.ean,
       productName:
         priceListNames.get(row.ean) ?? embeddedOne<{ name: string }>(row.products)?.name ?? null,
+      tbcCatalogStatus: tbcCatalogStatusForEan(row.ean, tbcCatalogEans),
       locationCode: location?.code ?? "",
       locationName: location?.name ?? "",
       salesUnits: row.sales_units,
