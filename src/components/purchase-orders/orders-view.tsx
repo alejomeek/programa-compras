@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { formatCop, formatOrderDate } from "@/lib/purchase-order-format";
 import type { PurchaseOrderRow } from "@/app/(app)/orders/types";
 
 export function OrdersView({ orders }: { orders: readonly PurchaseOrderRow[] }) {
@@ -123,18 +124,4 @@ export function OrderStatus({ status }: { status: PurchaseOrderRow["status"] }) 
   const label = status === "draft" ? "Borrador" : status === "issued" ? "Emitida" : "Cancelada";
   const tone = status === "issued" ? "text-emerald-700" : status === "cancelled" ? "text-destructive" : "text-amber-700";
   return <span className={`text-sm font-medium ${tone}`}>{label}</span>;
-}
-
-export function formatCop(value: string) {
-  const amount = Number(value);
-  return Number.isFinite(amount) ? `$ ${amount.toLocaleString("es-CO", { maximumFractionDigits: 0 })}` : "—";
-}
-
-export function formatOrderDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return new Intl.DateTimeFormat("es-CO", {
-    dateStyle: "medium",
-    timeZone: "America/Bogota",
-  }).format(date);
 }

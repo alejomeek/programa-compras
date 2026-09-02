@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { OrderStatus, formatCop } from "@/components/purchase-orders/orders-view";
+import { OrderStatus } from "@/components/purchase-orders/orders-view";
+import { formatCop } from "@/lib/purchase-order-format";
 import type { PurchaseOrderDetail } from "@/app/(app)/orders/types";
 
 export function PurchaseOrderDetailView({ orderId, canWrite }: { orderId: string; canWrite: boolean }) {

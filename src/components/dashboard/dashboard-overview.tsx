@@ -1,9 +1,10 @@
 import Link from "next/link";
 
 import { EmptyState } from "@/components/empty-state";
-import { OrderStatus, formatCop, formatOrderDate } from "@/components/purchase-orders/orders-view";
+import { OrderStatus } from "@/components/purchase-orders/orders-view";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { formatCop, formatOrderDate } from "@/lib/purchase-order-format";
 import type { PurchaseOrderRow } from "@/app/(app)/orders/types";
 
 export type DashboardOverviewProps = {

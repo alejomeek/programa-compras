@@ -1,7 +1,7 @@
 import { ArrowDown, ArrowUp, Equal } from "lucide-react";
 
 import { EmptyState } from "@/components/empty-state";
-import { formatCop } from "@/components/purchase-orders/orders-view";
+import { formatCop } from "@/lib/purchase-order-format";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
